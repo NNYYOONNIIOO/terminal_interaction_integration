@@ -1,0 +1,18 @@
+[
+{
+  "modid": "terminal_interaction_integration",
+  "name": "Terminal Interaction Integration",
+  "description": "AE2 terminal interaction integration mod",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["nyonio"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": [
+    "appliedenergistics2"
+  ]
+}
+]

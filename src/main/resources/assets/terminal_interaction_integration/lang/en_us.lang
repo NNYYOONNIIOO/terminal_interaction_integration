@@ -1,0 +1,4 @@
+terminal_interaction_integration.name=Terminal Interaction Integration
+terminal_interaction_integration.action.deposit=Deposit
+terminal_interaction_integration.action.fill=Fill
+terminal_interaction_integration.action.extract=Extract
