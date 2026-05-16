@@ -16,4 +16,6 @@ public interface IContainerHandler {
     long inject(ItemStack container, long amount, IActionSource source);
     
     String getContainerDisplayName(ItemStack container);
+    
+    ItemStack getEmptyContainer();
 }

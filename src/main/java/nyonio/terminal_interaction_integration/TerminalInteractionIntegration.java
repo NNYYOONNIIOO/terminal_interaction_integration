@@ -11,6 +11,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.Logger;
 import nyonio.terminal_interaction_integration.api.ResourceRegistrationEvent;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
+import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableAction;
 import nyonio.terminal_interaction_integration.network.CPacketResourceAction;
 import nyonio.terminal_interaction_integration.network.SPacketResourceUpdate;
 
@@ -35,6 +36,7 @@ public class TerminalInteractionIntegration
         network = NetworkRegistry.INSTANCE.newSimpleChannel(MODID);
         network.registerMessage(CPacketResourceAction.Handler.class, CPacketResourceAction.class, 0, Side.SERVER);
         network.registerMessage(SPacketResourceUpdate.Handler.class, SPacketResourceUpdate.class, 1, Side.CLIENT);
+        network.registerMessage(CPacketMEMonitorableAction.Handler.class, CPacketMEMonitorableAction.class, 2, Side.SERVER);
         
         logger.info("[TII] Pre-initialization complete");
     }

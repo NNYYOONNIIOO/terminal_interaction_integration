@@ -76,6 +76,18 @@ public final class TerminalInteractionRegistry {
         return null;
     }
     
+    public static IPacketType getPacketTypeByName(String name) {
+        if (name == null || name.isEmpty()) return null;
+        
+        for (IResourceProvider provider : getAllProviders()) {
+            IPacketType type = provider.getPacketType();
+            if (type != null && type.getName().equals(name)) {
+                return type;
+            }
+        }
+        return null;
+    }
+    
     public static IContainerHandler getContainerHandler(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
         
