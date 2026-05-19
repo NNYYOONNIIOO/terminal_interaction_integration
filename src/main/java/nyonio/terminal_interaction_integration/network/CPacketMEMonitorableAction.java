@@ -1,8 +1,12 @@
 package nyonio.terminal_interaction_integration.network;
 
+import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageGrid;
+import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.IStorageChannel;
+import appeng.api.storage.data.IAEStack;
 import appeng.container.implementations.ContainerMEMonitorable;
 import appeng.core.AELog;
 import appeng.core.sync.network.NetworkHandler;
@@ -171,6 +175,44 @@ public class CPacketMEMonitorableAction implements IMessage {
             }
         }
 
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private static long injectToNetworkResource(IStorageGrid grid, IResourceProvider provider,
+                long amount, IActionSource source) {
+            if (amount <= 0) return 0;
+            IStorageChannel<?> channel = provider.getStorageChannel();
+            if (channel == null) return 0;
+            IMEMonitor monitor = grid.getInventory(channel);
+            if (monitor == null) return 0;
+            try {
+                IAEStack stack = (IAEStack) channel.createStack(amount);
+                if (stack == null) return 0;
+                IAEStack result = (IAEStack) monitor.injectItems(stack, Actionable.MODULATE, source);
+                return result == null ? amount : amount - result.getStackSize();
+            } catch (Exception e) {
+                TerminalInteractionIntegration.getLogger().error("[TII] Failed to inject to network resource channel", e);
+                return 0;
+            }
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private static long extractFromNetworkResource(IStorageGrid grid, IResourceProvider provider,
+                long amount, IActionSource source) {
+            if (amount <= 0) return 0;
+            IStorageChannel<?> channel = provider.getStorageChannel();
+            if (channel == null) return 0;
+            IMEMonitor monitor = grid.getInventory(channel);
+            if (monitor == null) return 0;
+            try {
+                IAEStack stack = (IAEStack) channel.createStack(amount);
+                if (stack == null) return 0;
+                IAEStack result = (IAEStack) monitor.extractItems(stack, Actionable.MODULATE, source);
+                return result == null ? 0 : result.getStackSize();
+            } catch (Exception e) {
+                TerminalInteractionIntegration.getLogger().error("[TII] Failed to extract from network resource channel", e);
+                return 0;
+            }
+        }
+
         private static void handleCustomInteract(final CPacketMEMonitorableAction message, final EntityPlayerMP player) {
             final Container c = player.openContainer;
             if (!(c instanceof ContainerMEMonitorable)) return;
@@ -209,10 +251,20 @@ public class CPacketMEMonitorableAction implements IMessage {
                 long extracted = handler.extract(h, currentAmount, source);
                 TerminalInteractionIntegration.getLogger()
                     .info("[TII] Extracted {} from container to virtual packet", extracted);
+                if (extracted > 0) {
+                    long injected = injectToNetworkResource(grid, provider, extracted, source);
+                    TerminalInteractionIntegration.getLogger()
+                        .info("[TII] Injected {} to network resource channel", injected);
+                }
             } else {
-                long injected = handler.inject(h, amount, source);
+                long networkAmount = extractFromNetworkResource(grid, provider, amount, source);
                 TerminalInteractionIntegration.getLogger()
-                    .info("[TII] Injected {} to container from virtual packet", injected);
+                    .info("[TII] Extracted {} from network resource channel", networkAmount);
+                if (networkAmount > 0) {
+                    long injected = handler.inject(h, networkAmount, source);
+                    TerminalInteractionIntegration.getLogger()
+                        .info("[TII] Injected {} to container from network", injected);
+                }
             }
 
             if (h.getCount() > 1) {
@@ -259,7 +311,10 @@ public class CPacketMEMonitorableAction implements IMessage {
             if (emptyContainer == null || emptyContainer.isEmpty()) return;
 
             long amount = 1000;
-            long injected = handler.inject(emptyContainer, amount, source);
+            long networkAmount = extractFromNetworkResource(grid, provider, amount, source);
+            if (networkAmount <= 0) return;
+
+            long injected = handler.inject(emptyContainer, networkAmount, source);
 
             if (injected > 0) {
                 if (shift) {
@@ -297,13 +352,25 @@ public class CPacketMEMonitorableAction implements IMessage {
             IContainerHandler handler = TerminalInteractionRegistry.getContainerHandler(h);
             if (handler == null) return;
 
+            IPacketType packetType = TerminalInteractionRegistry.getPacketType(h);
+            if (packetType == null) return;
+
+            IResourceProvider provider = TerminalInteractionRegistry.getProvider(packetType.getName());
+            if (provider == null) return;
+
             long currentAmount = handler.getStoredAmount(h);
             if (currentAmount <= 0) return;
 
             long extracted = handler.extract(h, currentAmount, source);
 
             TerminalInteractionIntegration.getLogger()
-                .info("[TII] Custom deposit: extracted {} to network", extracted);
+                .info("[TII] Custom deposit: extracted {} from container", extracted);
+
+            if (extracted > 0) {
+                long injected = injectToNetworkResource(grid, provider, extracted, source);
+                TerminalInteractionIntegration.getLogger()
+                    .info("[TII] Custom deposit: injected {} to network resource channel", injected);
+            }
 
             if (h.getCount() > 1) {
                 h.shrink(1);

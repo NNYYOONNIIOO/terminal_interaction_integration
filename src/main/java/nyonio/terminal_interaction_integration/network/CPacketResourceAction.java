@@ -1,7 +1,23 @@
 package nyonio.terminal_interaction_integration.network;
 
+import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionHost;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.networking.storage.IStorageGrid;
+import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.IStorageChannel;
+import appeng.api.storage.data.IAEStack;
+import appeng.container.implementations.ContainerMEMonitorable;
+import appeng.core.AELog;
+import appeng.core.sync.network.NetworkHandler;
+import appeng.core.sync.packets.PacketInventoryAction;
+import appeng.helpers.InventoryAction;
+import appeng.me.helpers.PlayerSource;
+import appeng.util.Platform;
+import appeng.util.item.AEItemStack;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.inventory.Container;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
@@ -11,12 +27,6 @@ import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
-import appeng.core.AELog;
-import appeng.core.sync.network.NetworkHandler;
-import appeng.core.sync.packets.PacketInventoryAction;
-import appeng.helpers.InventoryAction;
-import appeng.util.Platform;
-import appeng.util.item.AEItemStack;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -91,6 +101,44 @@ public class CPacketResourceAction implements IMessage {
             return null;
         }
         
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private static long injectToNetworkResource(IStorageGrid grid, IResourceProvider provider,
+                long amount, IActionSource source) {
+            if (amount <= 0) return 0;
+            IStorageChannel<?> channel = provider.getStorageChannel();
+            if (channel == null) return 0;
+            IMEMonitor monitor = grid.getInventory(channel);
+            if (monitor == null) return 0;
+            try {
+                IAEStack stack = (IAEStack) channel.createStack(amount);
+                if (stack == null) return 0;
+                IAEStack result = (IAEStack) monitor.injectItems(stack, Actionable.MODULATE, source);
+                return result == null ? amount : amount - result.getStackSize();
+            } catch (Exception e) {
+                TerminalInteractionIntegration.getLogger().error("[TII] Failed to inject to network resource channel", e);
+                return 0;
+            }
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private static long extractFromNetworkResource(IStorageGrid grid, IResourceProvider provider,
+                long amount, IActionSource source) {
+            if (amount <= 0) return 0;
+            IStorageChannel<?> channel = provider.getStorageChannel();
+            if (channel == null) return 0;
+            IMEMonitor monitor = grid.getInventory(channel);
+            if (monitor == null) return 0;
+            try {
+                IAEStack stack = (IAEStack) channel.createStack(amount);
+                if (stack == null) return 0;
+                IAEStack result = (IAEStack) monitor.extractItems(stack, Actionable.MODULATE, source);
+                return result == null ? 0 : result.getStackSize();
+            } catch (Exception e) {
+                TerminalInteractionIntegration.getLogger().error("[TII] Failed to extract from network resource channel", e);
+                return 0;
+            }
+        }
+        
         private static void handleExtractFromNetwork(CPacketResourceAction message, EntityPlayerMP player) {
             IResourceProvider provider = TerminalInteractionRegistry.getProvider(message.packetTypeName);
             if (provider == null) {
@@ -106,6 +154,26 @@ public class CPacketResourceAction implements IMessage {
                 return;
             }
             
+            final Container c = player.openContainer;
+            if (!(c instanceof ContainerMEMonitorable)) return;
+
+            final IStorageGrid grid;
+            final IActionSource source;
+            try {
+                ContainerMEMonitorable cme = (ContainerMEMonitorable) c;
+                grid = cme.getNetworkNode().getGrid().getCache(IStorageGrid.class);
+                source = new PlayerSource(player, (IActionHost) cme.getTarget());
+            } catch (Exception e) {
+                return;
+            }
+            
+            long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
+            if (networkAmount <= 0) {
+                TerminalInteractionIntegration.getLogger()
+                    .warn("[TII] No resources available in network for: " + message.packetTypeName);
+                return;
+            }
+            
             ItemStack container = handler.getEmptyContainer();
             if (container == null || container.isEmpty()) {
                 TerminalInteractionIntegration.getLogger()
@@ -113,7 +181,7 @@ public class CPacketResourceAction implements IMessage {
                 return;
             }
             
-            long injected = handler.inject(container, message.packetAmount, null);
+            long injected = handler.inject(container, networkAmount, source);
             TerminalInteractionIntegration.getLogger()
                 .info("[TII] Injected {} to container from network", injected);
             
@@ -122,7 +190,7 @@ public class CPacketResourceAction implements IMessage {
             
             TerminalInteractionIntegration.getLogger()
                 .info("[TII] Extracted container from network: type={}, amount={}", 
-                    message.packetTypeName, message.packetAmount);
+                    message.packetTypeName, injected);
         }
         
         private static void handleContainerInteraction(CPacketResourceAction message, EntityPlayerMP player) {
@@ -137,6 +205,19 @@ public class CPacketResourceAction implements IMessage {
             if (handler == null) {
                 TerminalInteractionIntegration.getLogger()
                     .warn("[TII] No container handler for: " + message.packetTypeName);
+                return;
+            }
+            
+            final Container c = player.openContainer;
+            if (!(c instanceof ContainerMEMonitorable)) return;
+
+            final IStorageGrid grid;
+            final IActionSource source;
+            try {
+                ContainerMEMonitorable cme = (ContainerMEMonitorable) c;
+                grid = cme.getNetworkNode().getGrid().getCache(IStorageGrid.class);
+                source = new PlayerSource(player, (IActionHost) cme.getTarget());
+            } catch (Exception e) {
                 return;
             }
             
@@ -159,13 +240,23 @@ public class CPacketResourceAction implements IMessage {
             }
             
             if (message.isFilling) {
-                long extracted = handler.extract(heldItem, message.currentAmount, null);
+                long extracted = handler.extract(heldItem, message.currentAmount, source);
                 TerminalInteractionIntegration.getLogger()
                     .info("[TII] Extracted {} from container", extracted);
+                if (extracted > 0) {
+                    long injected = injectToNetworkResource(grid, provider, extracted, source);
+                    TerminalInteractionIntegration.getLogger()
+                        .info("[TII] Injected {} to network resource channel", injected);
+                }
             } else {
-                long injected = handler.inject(heldItem, message.packetAmount, null);
+                long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
                 TerminalInteractionIntegration.getLogger()
-                    .info("[TII] Injected {} to container", injected);
+                    .info("[TII] Extracted {} from network resource channel", networkAmount);
+                if (networkAmount > 0) {
+                    long injected = handler.inject(heldItem, networkAmount, source);
+                    TerminalInteractionIntegration.getLogger()
+                        .info("[TII] Injected {} to container from network", injected);
+                }
             }
             
             long newAmount = handler.getStoredAmount(heldItem);
