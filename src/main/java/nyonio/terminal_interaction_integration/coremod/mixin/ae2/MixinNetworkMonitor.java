@@ -48,20 +48,13 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     public void initResourceMonitor(GridStorageCache gridCache, IStorageChannel<?> resourceChannel) {
         if (this.myChannel instanceof IItemStorageChannel) {
             IResourceProvider provider = TerminalInteractionRegistry.getProviderByChannel(resourceChannel);
-            if (provider == null) {
-                TerminalInteractionIntegration.getLogger().warn(
-                    "[TII] No provider found for channel: " + resourceChannel.getClass().getSimpleName()
-                );
-                return;
-            }
+            if (provider == null) return;
             
             String providerName = provider.getName();
             if (!resourceMonitors.containsKey(providerName)) {
                 ResourceFakeMonitor monitor = new ResourceFakeMonitor(gridCache, resourceChannel);
                 resourceMonitors.put(providerName, monitor);
-                TerminalInteractionIntegration.getLogger().info(
-                    "[TII] ResourceFakeMonitor initialized for: " + providerName
-                );
+                TerminalInteractionRegistry.registerResourceMonitor(providerName, monitor);
             }
         }
     }

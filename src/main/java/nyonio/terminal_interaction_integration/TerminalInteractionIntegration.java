@@ -11,6 +11,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.Logger;
 import nyonio.terminal_interaction_integration.api.ResourceRegistrationEvent;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
+import nyonio.terminal_interaction_integration.client.TerminalInteractionHandler;
 import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableAction;
 import nyonio.terminal_interaction_integration.network.CPacketResourceAction;
 import nyonio.terminal_interaction_integration.network.SPacketResourceUpdate;
@@ -46,25 +47,21 @@ public class TerminalInteractionIntegration
     {
         ResourceRegistrationEvent registrationEvent = new ResourceRegistrationEvent();
         MinecraftForge.EVENT_BUS.post(registrationEvent);
-        logger.info("[TII] Resource registration event posted");
+        logger.info("[TII] Resource registration event posted in init");
+        
+        logger.info("[TII] {} resource providers registered", 
+            TerminalInteractionRegistry.getAllProviders().size());
         
         if (event.getSide().isClient()) {
             initClient();
         }
         
-        logger.info("[TII] {} initialized with {} resource providers", 
-            NAME, TerminalInteractionRegistry.getAllProviders().size());
+        logger.info("[TII] {} initialized", NAME);
     }
     
     private void initClient() {
-        try {
-            Class<?> handlerClass = Class.forName("nyonio.terminal_interaction_integration.client.TerminalInteractionHandler");
-            java.lang.reflect.Method initMethod = handlerClass.getMethod("init");
-            initMethod.invoke(null);
-            logger.info("[TII] TerminalInteractionHandler initialized");
-        } catch (Exception e) {
-            logger.error("[TII] Failed to initialize TerminalInteractionHandler", e);
-        }
+        TerminalInteractionHandler.init();
+        logger.info("[TII] TerminalInteractionHandler initialized");
     }
     
     public static Logger getLogger() {

@@ -26,14 +26,14 @@ import java.util.Deque;
 public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
 
     private final NetworkMonitor monitor;
-    private final GridStorageCache storage;
-    private final IStorageChannel<?> resourceChannel;
     private final IResourceProvider provider;
+    private final IStorageChannel<?> resourceChannel;
+    private final GridStorageCache gridCache;
 
     public ResourceFakeMonitor(final GridStorageCache grid, final IStorageChannel<?> resourceChannel) {
-        this.monitor = (NetworkMonitor) grid.getInventory(resourceChannel);
-        this.storage = grid;
+        this.gridCache = grid;
         this.resourceChannel = resourceChannel;
+        this.monitor = (NetworkMonitor) grid.getInventory(resourceChannel);
         this.provider = TerminalInteractionRegistry.getProviderByChannel(resourceChannel);
     }
 
@@ -50,13 +50,19 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
             return stack;
         }
 
-        long amount = packetType.getAmount(itemRep);
+        long amount = stack.getStackSize();
         if (amount <= 0) {
+            return null;
+        }
+
+        if (monitor == null) {
             return stack;
         }
 
-        IAEStack toInject = createResourceStack(amount);
-        if (toInject == null) return stack;
+        IAEStack toInject = packetType.createResourceStack(amount);
+        if (toInject == null) {
+            return stack;
+        }
         
         FakeMonitorSource fakeSource = FakeMonitorSource.release(source);
         IAEStack result = (IAEStack) monitor.injectItems(toInject, actionable, fakeSource);
@@ -82,13 +88,19 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
             return null;
         }
 
-        long requestedAmount = packetType.getAmount(itemRep);
+        long requestedAmount = stack.getStackSize();
         if (requestedAmount <= 0) {
             return null;
         }
 
-        IAEStack toExtract = createResourceStack(requestedAmount);
-        if (toExtract == null) return null;
+        if (monitor == null) {
+            return null;
+        }
+
+        IAEStack toExtract = packetType.createResourceStack(requestedAmount);
+        if (toExtract == null) {
+            return null;
+        }
         
         FakeMonitorSource fakeSource = FakeMonitorSource.release(source);
         IAEStack result = (IAEStack) monitor.extractItems(toExtract, actionable, fakeSource);
@@ -98,14 +110,6 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
             return null;
         } else {
             return packetType.createAEStack(result.getStackSize());
-        }
-    }
-
-    private IAEStack createResourceStack(long amount) {
-        try {
-            return (IAEStack) resourceChannel.createStack(amount);
-        } catch (Exception e) {
-            return null;
         }
     }
 
@@ -204,16 +208,12 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
 
     @Override
     public int getSlot() {
-        return monitor.getSlot();
+        return monitor != null ? monitor.getSlot() : 0;
     }
 
     @Override
     public boolean validForPass(int i) {
         return i == 2;
-    }
-
-    public GridStorageCache getStorage() {
-        return storage;
     }
 
     public static class FakeMonitorSource implements IActionSource {
@@ -223,8 +223,8 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
 
         public static FakeMonitorSource release(IActionSource source) {
             synchronized (POOL) {
-                if (!POOL.isEmpty()) {
-                    FakeMonitorSource s = POOL.peek();
+                FakeMonitorSource s = POOL.poll();
+                if (s != null) {
                     s.source = source;
                     return s;
                 }

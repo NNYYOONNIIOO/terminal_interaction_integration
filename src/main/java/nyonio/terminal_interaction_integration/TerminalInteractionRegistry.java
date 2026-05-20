@@ -3,12 +3,15 @@ package nyonio.terminal_interaction_integration.api;
 import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.data.IAEStack;
 import net.minecraft.item.ItemStack;
+import nyonio.terminal_interaction_integration.ae2.ResourceFakeMonitor;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class TerminalInteractionRegistry {
     private static final Map<String, IResourceProvider> providers = new ConcurrentHashMap<>();
     private static final Map<Class<? extends IStorageChannel<?>>, IResourceProvider> channelToProvider = new ConcurrentHashMap<>();
+    private static final Map<String, List<ResourceFakeMonitor>> resourceMonitors = new ConcurrentHashMap<>();
     
     private static volatile boolean initialized = false;
     
@@ -100,6 +103,18 @@ public final class TerminalInteractionRegistry {
         return null;
     }
     
+    public static IResourceProvider getProviderForContainer(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        
+        for (IResourceProvider provider : getAllProviders()) {
+            IContainerHandler handler = provider.getContainerHandler();
+            if (handler != null && handler.canHandle(stack)) {
+                return provider;
+            }
+        }
+        return null;
+    }
+    
     public static boolean isPacket(ItemStack stack) {
         return getPacketType(stack) != null;
     }
@@ -138,9 +153,20 @@ public final class TerminalInteractionRegistry {
         return initialized;
     }
     
+    public static void registerResourceMonitor(String providerName, ResourceFakeMonitor monitor) {
+        if (providerName == null || monitor == null) return;
+        resourceMonitors.computeIfAbsent(providerName, k -> new ArrayList<>()).add(monitor);
+    }
+    
+    public static List<ResourceFakeMonitor> getResourceMonitors(String providerName) {
+        if (providerName == null) return null;
+        return resourceMonitors.get(providerName);
+    }
+    
     public static void clear() {
         providers.clear();
         channelToProvider.clear();
+        resourceMonitors.clear();
         initialized = false;
     }
 }

@@ -13,7 +13,7 @@ apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
-version = '1.0'
+version = '1.1.1'
 group = 'nyonio.terminal_interaction_integration'
 archivesBaseName = 'terminal_interaction_integration'
 
@@ -54,6 +54,9 @@ dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2859'
     
     implementation fg.deobf("curse.maven:ae2-extended-life-570458:6302098")
+    
+    compileOnly fg.deobf("curse.maven:mekanism-ce-unofficial-840735:7966589")
+    compileOnly fg.deobf("curse.maven:ae2fluidcraft-rework-unofficial-1404390:7742544")
     
     annotationProcessor 'org.ow2.asm:asm-debug-all:5.2'
     annotationProcessor 'com.google.guava:guava:32.1.2-jre'

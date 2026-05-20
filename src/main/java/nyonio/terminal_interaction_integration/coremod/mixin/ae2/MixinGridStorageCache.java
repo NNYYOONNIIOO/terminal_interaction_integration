@@ -9,7 +9,6 @@ import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
 import appeng.me.cache.GridStorageCache;
 import appeng.me.cache.NetworkMonitor;
-import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IPacketType;
 import nyonio.terminal_interaction_integration.api.IResourceNetworkMonitor;
@@ -30,7 +29,7 @@ public abstract class MixinGridStorageCache {
 
     @Shadow
     @Final
-    private Map<IItemStorageChannel, NetworkMonitor<?>> storageMonitors;
+    private Map<IStorageChannel<? extends IAEStack>, NetworkMonitor<?>> storageMonitors;
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void onInit(final IGrid g, final CallbackInfo ci) {
@@ -45,16 +44,12 @@ public abstract class MixinGridStorageCache {
                     IStorageChannel<?> channel = provider.getStorageChannel();
                     if (channel != null) {
                         monitor.initResourceMonitor((GridStorageCache) (Object) this, channel);
-                        TerminalInteractionIntegration.getLogger().info(
-                            "[TII] Initialized resource monitor for: " + provider.getName()
-                        );
                     }
                 }
                 
                 TerminalInteractionRegistry.setInitialized(true);
             }
         } catch (Exception e) {
-            TerminalInteractionIntegration.getLogger().error("[TII] Failed to initialize resource monitors", e);
         }
     }
 
@@ -65,10 +60,6 @@ public abstract class MixinGridStorageCache {
         
         IPacketType packetType = provider.getPacketType();
         if (packetType == null) return;
-        
-        TerminalInteractionIntegration.getLogger().debug(
-            "[TII] postAlterationOfStoredItems called for: " + provider.getName()
-        );
         
         try {
             List<IAEItemStack> changes = new ArrayList<>();
@@ -91,16 +82,10 @@ public abstract class MixinGridStorageCache {
                 );
                 
                 if (itemMonitor instanceof IResourceNetworkMonitor) {
-                    TerminalInteractionIntegration.getLogger().debug(
-                        "[TII] Notifying terminal of resource changes: " + changes.size() + " entries"
-                    );
                     ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor).resourcePostChange(true, changes, src);
                 }
             }
         } catch (Exception e) {
-            TerminalInteractionIntegration.getLogger().error(
-                "[TII] Failed to post resource alteration for: " + provider.getName(), e
-            );
         }
     }
 
@@ -117,11 +102,6 @@ public abstract class MixinGridStorageCache {
         
         IPacketType packetType = provider.getPacketType();
         if (packetType == null) return;
-        
-        TerminalInteractionIntegration.getLogger().debug(
-            "[TII] postChangesToNetwork called for: " + provider.getName() + 
-            ", direction: " + (upOrDown > 0 ? "ADD" : "REMOVE")
-        );
         
         try {
             List<IAEItemStack> changes = new ArrayList<>();
@@ -143,16 +123,10 @@ public abstract class MixinGridStorageCache {
                 );
                 
                 if (itemMonitor instanceof IResourceNetworkMonitor) {
-                    TerminalInteractionIntegration.getLogger().debug(
-                        "[TII] Notifying network of resource changes: " + changes.size() + " entries"
-                    );
                     ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor).resourcePostChange(upOrDown > 0, changes, src);
                 }
             }
         } catch (Exception e) {
-            TerminalInteractionIntegration.getLogger().error(
-                "[TII] Failed to post resource changes to network for: " + provider.getName(), e
-            );
         }
     }
 }

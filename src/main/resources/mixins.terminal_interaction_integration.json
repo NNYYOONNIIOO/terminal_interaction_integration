@@ -8,11 +8,10 @@
   "mixins": [
     "ae2.MixinGridStorageCache",
     "ae2.MixinNetworkMonitor",
+    "ae2.MixinNetworkInventoryHandler",
     "ae2.MixinContainerMEMonitorable"
   ],
-  "client": [
-    "ae2.MixinGuiMEMonitorable"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 0
   }
