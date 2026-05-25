@@ -11,7 +11,9 @@
     "ae2.MixinNetworkInventoryHandler",
     "ae2.MixinContainerMEMonitorable"
   ],
-  "client": [],
+  "client": [
+    "ae2.MixinGuiMEMonitorable"
+  ],
   "injectors": {
     "defaultRequire": 0
   }

@@ -11,7 +11,6 @@ import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.Logger;
 import nyonio.terminal_interaction_integration.api.ResourceRegistrationEvent;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
-import nyonio.terminal_interaction_integration.client.TerminalInteractionHandler;
 import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableAction;
 import nyonio.terminal_interaction_integration.network.CPacketResourceAction;
 import nyonio.terminal_interaction_integration.network.SPacketResourceUpdate;
@@ -60,7 +59,7 @@ public class TerminalInteractionIntegration
     }
     
     private void initClient() {
-        TerminalInteractionHandler.init();
+        nyonio.terminal_interaction_integration.client.ClientInit.init();
         logger.info("[TII] TerminalInteractionHandler initialized");
     }
     

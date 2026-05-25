@@ -10,7 +10,9 @@
     "ae2.MixinNetworkMonitor",
     "ae2.MixinContainerMEMonitorable"
   ],
-  "client": [],
+  "client": [
+    "ae2.MixinGuiMEMonitorable"
+  ],
   "injectors": {
     "defaultRequire": 0
   }
