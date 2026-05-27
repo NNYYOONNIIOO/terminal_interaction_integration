@@ -37,8 +37,6 @@ public class TerminalInteractionIntegration
         network.registerMessage(CPacketResourceAction.Handler.class, CPacketResourceAction.class, 0, Side.SERVER);
         network.registerMessage(SPacketResourceUpdate.Handler.class, SPacketResourceUpdate.class, 1, Side.CLIENT);
         network.registerMessage(CPacketMEMonitorableAction.Handler.class, CPacketMEMonitorableAction.class, 2, Side.SERVER);
-        
-        logger.info("[TII] Pre-initialization complete");
     }
 
     @EventHandler
@@ -46,21 +44,14 @@ public class TerminalInteractionIntegration
     {
         ResourceRegistrationEvent registrationEvent = new ResourceRegistrationEvent();
         MinecraftForge.EVENT_BUS.post(registrationEvent);
-        logger.info("[TII] Resource registration event posted in init");
-        
-        logger.info("[TII] {} resource providers registered", 
-            TerminalInteractionRegistry.getAllProviders().size());
         
         if (event.getSide().isClient()) {
             initClient();
         }
-        
-        logger.info("[TII] {} initialized", NAME);
     }
     
     private void initClient() {
         nyonio.terminal_interaction_integration.client.ClientInit.init();
-        logger.info("[TII] TerminalInteractionHandler initialized");
     }
     
     public static Logger getLogger() {

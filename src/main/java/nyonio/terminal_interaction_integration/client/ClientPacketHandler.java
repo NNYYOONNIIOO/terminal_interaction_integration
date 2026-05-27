@@ -29,8 +29,6 @@ public class ClientPacketHandler {
                         NBTTagCompound tag = net.minecraft.nbt.CompressedStreamTools.read(dis);
                         heldItem.setTagCompound(tag);
                     } catch (Exception e) {
-                        TerminalInteractionIntegration.getLogger()
-                            .error("[TII] Failed to deserialize NBT tag", e);
                     }
                 }
             }
@@ -42,10 +40,6 @@ public class ClientPacketHandler {
             if (Minecraft.getMinecraft().currentScreen != null) {
                 Minecraft.getMinecraft().currentScreen.updateScreen();
             }
-
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Client received update for {}: new amount = {}",
-                    message.providerName, message.newAmount);
         });
     }
 }

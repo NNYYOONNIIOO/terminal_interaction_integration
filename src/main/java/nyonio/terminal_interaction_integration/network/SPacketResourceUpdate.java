@@ -12,9 +12,9 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 
 public class SPacketResourceUpdate implements IMessage {
-    private String providerName;
-    private long newAmount;
-    private byte[] tagBytes;
+    public String providerName;
+    public long newAmount;
+    public byte[] tagBytes;
 
     public SPacketResourceUpdate() {}
 

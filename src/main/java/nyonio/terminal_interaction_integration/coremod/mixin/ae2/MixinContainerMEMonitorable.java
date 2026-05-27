@@ -40,8 +40,6 @@ public abstract class MixinContainerMEMonitorable {
         IPacketType packetType = TerminalInteractionRegistry.getPacketType(slotStack);
         if (packetType == null) return;
         
-        TerminalInteractionIntegration.getLogger()
-            .info("[TII] Blocking onSlotClick for virtual packet: {}", packetType.getName());
         ci.cancel();
     }
 }

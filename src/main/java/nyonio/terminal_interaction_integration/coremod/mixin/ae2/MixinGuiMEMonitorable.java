@@ -78,9 +78,6 @@ public abstract class MixinGuiMEMonitorable extends AEBaseMEGui {
                 new CPacketMEMonitorableAction(CPacketMEMonitorableAction.CUSTOM_INTERACT, tag)
             );
             
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Custom container interact with virtual packet: type={}", packetType.getName());
-            
             return true;
         }
         
@@ -92,9 +89,6 @@ public abstract class MixinGuiMEMonitorable extends AEBaseMEGui {
             TerminalInteractionIntegration.getNetwork().sendToServer(
                 new CPacketMEMonitorableAction(CPacketMEMonitorableAction.CUSTOM_DEPOSIT, tag)
             );
-            
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Custom container deposit to network: amount={}", currentAmount);
             
             return true;
         }
@@ -121,9 +115,6 @@ public abstract class MixinGuiMEMonitorable extends AEBaseMEGui {
                 TerminalInteractionIntegration.getNetwork().sendToServer(
                     new CPacketMEMonitorableAction(CPacketMEMonitorableAction.CUSTOM_OPERATE, tag)
                 );
-                
-                TerminalInteractionIntegration.getLogger()
-                    .info("[TII] Virtual packet operate: type={}", packetType.getName());
                 
                 return true;
             }

@@ -87,10 +87,6 @@ public class CPacketResourceAction implements IMessage {
         public IMessage onMessage(CPacketResourceAction message, MessageContext ctx) {
             EntityPlayerMP player = ctx.getServerHandler().player;
             
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Received packet ID: {}, type={}, amount={}, filling={}, extractFromNetwork={}", 
-                    message.packetId, message.packetTypeName, message.packetAmount, message.isFilling, message.extractFromNetwork);
-            
             player.getServerWorld().addScheduledTask(() -> {
                 if (message.extractFromNetwork) {
                     handleExtractFromNetwork(message, player);
@@ -182,15 +178,9 @@ public class CPacketResourceAction implements IMessage {
             }
             
             long injected = handler.inject(container, networkAmount, source);
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Injected {} to container from network", injected);
             
             player.inventory.setItemStack(container);
             updateHeld(player);
-            
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Extracted container from network: type={}, amount={}", 
-                    message.packetTypeName, injected);
         }
         
         private static void handleContainerInteraction(CPacketResourceAction message, EntityPlayerMP player) {
@@ -222,46 +212,24 @@ public class CPacketResourceAction implements IMessage {
             }
             
             ItemStack heldItem = player.inventory.getItemStack();
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] Processing resource action: type={}, amount={}, filling={}, heldItem={}",
-                    message.packetTypeName, message.packetAmount, message.isFilling, 
-                    heldItem != null ? heldItem.getDisplayName() : "null");
             
-            if (heldItem == null || heldItem.isEmpty()) {
-                TerminalInteractionIntegration.getLogger()
-                    .warn("[TII] No item in cursor");
-                return;
-            }
+            if (heldItem == null || heldItem.isEmpty()) return;
             
-            if (!handler.canHandle(heldItem)) {
-                TerminalInteractionIntegration.getLogger()
-                    .warn("[TII] Handler cannot handle item: " + heldItem.getDisplayName());
-                return;
-            }
+            if (!handler.canHandle(heldItem)) return;
             
             if (message.isFilling) {
                 long extracted = handler.extract(heldItem, message.currentAmount, source);
-                TerminalInteractionIntegration.getLogger()
-                    .info("[TII] Extracted {} from container", extracted);
                 if (extracted > 0) {
-                    long injected = injectToNetworkResource(grid, provider, extracted, source);
-                    TerminalInteractionIntegration.getLogger()
-                        .info("[TII] Injected {} to network resource channel", injected);
+                    injectToNetworkResource(grid, provider, extracted, source);
                 }
             } else {
                 long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
-                TerminalInteractionIntegration.getLogger()
-                    .info("[TII] Extracted {} from network resource channel", networkAmount);
                 if (networkAmount > 0) {
-                    long injected = handler.inject(heldItem, networkAmount, source);
-                    TerminalInteractionIntegration.getLogger()
-                        .info("[TII] Injected {} to container from network", injected);
+                    handler.inject(heldItem, networkAmount, source);
                 }
             }
             
             long newAmount = handler.getStoredAmount(heldItem);
-            TerminalInteractionIntegration.getLogger()
-                .info("[TII] New amount: {}", newAmount);
             
             updateHeld(player);
             
@@ -274,8 +242,6 @@ public class CPacketResourceAction implements IMessage {
                     net.minecraft.nbt.CompressedStreamTools.write(tag, dos);
                     tagBytes = baos.toByteArray();
                 } catch (Exception e) {
-                    TerminalInteractionIntegration.getLogger()
-                        .error("[TII] Failed to serialize NBT tag", e);
                 }
             }
             
@@ -296,12 +262,8 @@ public class CPacketResourceAction implements IMessage {
                         ), 
                         player
                     );
-                    TerminalInteractionIntegration.getLogger()
-                        .info("[TII] Sent UPDATE_HAND packet to client");
                 } catch (IOException e) {
                     AELog.debug(e);
-                    TerminalInteractionIntegration.getLogger()
-                        .error("[TII] Failed to send UPDATE_HAND packet", e);
                 }
             }
         }
