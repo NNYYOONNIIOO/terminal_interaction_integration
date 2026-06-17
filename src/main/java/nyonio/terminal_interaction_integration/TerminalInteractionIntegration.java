@@ -21,6 +21,7 @@ public class TerminalInteractionIntegration
     public static final String MODID = "terminal_interaction_integration";
     public static final String NAME = "Terminal Interaction Integration";
     public static final String VERSION = "1.0";
+    public static final String CHANNEL = "tii";
 
     @Mod.Instance(MODID)
     public static TerminalInteractionIntegration instance;
@@ -33,7 +34,7 @@ public class TerminalInteractionIntegration
     {
         logger = event.getModLog();
         
-        network = NetworkRegistry.INSTANCE.newSimpleChannel(MODID);
+        network = NetworkRegistry.INSTANCE.newSimpleChannel(CHANNEL);
         network.registerMessage(CPacketResourceAction.Handler.class, CPacketResourceAction.class, 0, Side.SERVER);
         network.registerMessage(SPacketResourceUpdate.Handler.class, SPacketResourceUpdate.class, 1, Side.CLIENT);
         network.registerMessage(CPacketMEMonitorableAction.Handler.class, CPacketMEMonitorableAction.class, 2, Side.SERVER);

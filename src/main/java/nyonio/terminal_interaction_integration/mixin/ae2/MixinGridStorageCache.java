@@ -1,4 +1,4 @@
-package nyonio.terminal_interaction_integration.coremod.mixin.ae2;
+package nyonio.terminal_interaction_integration.mixin.ae2;
 
 import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;

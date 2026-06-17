@@ -1,6 +1,7 @@
-package nyonio.terminal_interaction_integration.coremod.mixin.ae2;
+package nyonio.terminal_interaction_integration.mixin.ae2;
 
 import appeng.api.config.Actionable;
+import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.storage.IStorageChannel;
@@ -34,6 +35,8 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
 
     private final Map<String, ResourceFakeMonitor> tii$resourceMonitors = new HashMap<>();
     private GridStorageCache tii$storageCache;
+    private SecurityCache tii$security;
+    private boolean tii$initialized = false;
 
     @Shadow
     protected abstract void surface(NetworkInventoryHandler<T> networkInventoryHandler, Actionable type);
@@ -44,19 +47,28 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
     @Inject(method = "<init>", at = @At("TAIL"))
     private void onInit(final IStorageChannel<?> chan, final SecurityCache security, final CallbackInfo ci) {
         if (chan instanceof IItemStorageChannel) {
-            try {
-                tii$storageCache = (GridStorageCache) security.getGrid().getCache(GridStorageCache.class);
-                
-                for (IResourceProvider provider : TerminalInteractionRegistry.getAllProviders()) {
-                    IStorageChannel<?> resourceChannel = provider.getStorageChannel();
-                    if (resourceChannel != null) {
-                        ResourceFakeMonitor monitor = new ResourceFakeMonitor(tii$storageCache, resourceChannel);
-                        tii$resourceMonitors.put(provider.getName(), monitor);
-                    }
+            tii$security = security;
+        }
+    }
+
+    private void tii$ensureInitialized() {
+        if (tii$initialized) return;
+        tii$initialized = true;
+        if (tii$security == null) return;
+        try {
+            IGrid grid = tii$security.getGrid();
+            if (grid == null) return;
+            tii$storageCache = (GridStorageCache) grid.getCache(GridStorageCache.class);
+            if (tii$storageCache == null) return;
+            for (IResourceProvider provider : TerminalInteractionRegistry.getAllProviders()) {
+                IStorageChannel<?> resourceChannel = provider.getStorageChannel();
+                if (resourceChannel != null) {
+                    ResourceFakeMonitor monitor = new ResourceFakeMonitor(tii$storageCache, resourceChannel);
+                    tii$resourceMonitors.put(provider.getName(), monitor);
                 }
-            } catch (Exception e) {
-                TerminalInteractionIntegration.getLogger().error("[TII] Failed to initialize resource monitors", e);
             }
+        } catch (Exception ignored) {
+            // Grid may be in invalid state during destroy/rebuild, silently skip
         }
     }
 
@@ -66,6 +78,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
         if (!(input instanceof IAEItemStack)) return;
         if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
 
+        tii$ensureInitialized();
         IAEItemStack itemStack = (IAEItemStack) input;
         ItemStack itemRep = itemStack.asItemStackRepresentation();
 
@@ -92,6 +105,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
         if (!(request instanceof IAEItemStack)) return;
         if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
 
+        tii$ensureInitialized();
         IAEItemStack itemStack = (IAEItemStack) request;
         ItemStack itemRep = itemStack.asItemStackRepresentation();
 

@@ -1,7 +1,7 @@
 {
   "required": false,
   "compatibilityLevel": "JAVA_8",
-  "package": "nyonio.terminal_interaction_integration.coremod.mixin",
+  "package": "nyonio.terminal_interaction_integration.mixin",
   "refmap": "mixins.terminal_interaction_integration.refmap.json",
   "target": "@env(DEFAULT)",
   "minVersion": "0.8",
