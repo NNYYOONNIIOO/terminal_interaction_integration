@@ -7,10 +7,6 @@ import appeng.core.sync.network.NetworkHandler;
 import appeng.core.sync.packets.PacketInventoryAction;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.helpers.InventoryAction;
-import com.glodblock.github.integration.mek.FCGasItems;
-import com.glodblock.github.loader.FCItems;
-import mekanism.api.gas.GasStack;
-import mekanism.api.gas.IGasItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.gui.GuiScreen;
@@ -28,7 +24,6 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.Optional;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
@@ -40,6 +35,7 @@ import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableActio
 import nyonio.terminal_interaction_integration.util.UtilClient;
 import org.lwjgl.input.Mouse;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +49,16 @@ public class TerminalInteractionHandler {
     private static boolean ae2fcLoaded = false;
     private static boolean mekanismLoaded = false;
     private static boolean checkedMods = false;
+    
+    // Reflective references for ae2fcru API
+    private static boolean ae2fcApiChecked = false;
+    private static Item fcFluidDrop = null;
+    private static Item fcGasDrop = null;
+    private static boolean fcGasAvailable = false;
+    
+    // Reflective references for Mekanism API
+    private static boolean mekanismApiChecked = false;
+    private static Class<?> igasItemClass = null;
     
     public static void init() {
         if (instance == null) {
@@ -69,6 +75,32 @@ public class TerminalInteractionHandler {
         mekanismLoaded = Loader.isModLoaded("mekanism");
     }
     
+    private static void checkAE2FCApi() {
+        if (ae2fcApiChecked) return;
+        ae2fcApiChecked = true;
+        if (!ae2fcLoaded) return;
+        try {
+            Class<?> fcItemsClass = Class.forName("com.glodblock.github.loader.FCItems");
+            Field fluidDropField = fcItemsClass.getField("FLUID_DROP");
+            fcFluidDrop = (Item) fluidDropField.get(null);
+        } catch (Exception ignored) {}
+        try {
+            Class<?> fcGasItemsClass = Class.forName("com.glodblock.github.integration.mek.FCGasItems");
+            Field gasDropField = fcGasItemsClass.getField("GAS_DROP");
+            fcGasDrop = (Item) gasDropField.get(null);
+            fcGasAvailable = true;
+        } catch (Exception ignored) {}
+    }
+    
+    private static void checkMekanismApi() {
+        if (mekanismApiChecked) return;
+        mekanismApiChecked = true;
+        if (!mekanismLoaded) return;
+        try {
+            igasItemClass = Class.forName("mekanism.api.gas.IGasItem");
+        } catch (Exception ignored) {}
+    }
+    
     private static boolean isFluidContainer(ItemStack h) {
         if (h.isEmpty()) return false;
         return h.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY, null);
@@ -76,14 +108,17 @@ public class TerminalInteractionHandler {
     
     private static boolean isGasContainer(ItemStack h) {
         if (h.isEmpty() || !mekanismLoaded) return false;
-        return h.getItem() instanceof IGasItem;
+        checkMekanismApi();
+        if (igasItemClass == null) return false;
+        return igasItemClass.isInstance(h.getItem());
     }
     
     private static boolean isAE2FCVirtualPacket(IAEItemStack aeStack) {
         if (aeStack == null || !ae2fcLoaded) return false;
+        checkAE2FCApi();
         Item item = aeStack.getItem();
-        if (item == FCItems.FLUID_DROP) return true;
-        if (mekanismLoaded && item == FCGasItems.GAS_DROP) return true;
+        if (fcFluidDrop != null && item == fcFluidDrop) return true;
+        if (fcGasAvailable && fcGasDrop != null && item == fcGasDrop) return true;
         return false;
     }
     
@@ -134,10 +169,17 @@ public class TerminalInteractionHandler {
     
     private static boolean hasGasContent(ItemStack h) {
         if (h.isEmpty() || !mekanismLoaded) return false;
-        if (h.getItem() instanceof IGasItem) {
-            GasStack gas = ((IGasItem) h.getItem()).getGas(h);
-            return gas != null && gas.amount > 0;
-        }
+        checkMekanismApi();
+        if (igasItemClass == null || !igasItemClass.isInstance(h.getItem())) return false;
+        try {
+            Method getGasMethod = h.getItem().getClass().getMethod("getGas", ItemStack.class);
+            Object gasStack = getGasMethod.invoke(h.getItem(), h);
+            if (gasStack != null) {
+                Method getAmountMethod = gasStack.getClass().getMethod("getAmount");
+                int amount = (int) getAmountMethod.invoke(gasStack);
+                return amount > 0;
+            }
+        } catch (Exception ignored) {}
         return false;
     }
     

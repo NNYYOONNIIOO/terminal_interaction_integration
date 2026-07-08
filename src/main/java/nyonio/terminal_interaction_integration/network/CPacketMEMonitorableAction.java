@@ -42,6 +42,7 @@ import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 
 public class CPacketMEMonitorableAction implements IMessage {
 
@@ -194,7 +195,7 @@ public class CPacketMEMonitorableAction implements IMessage {
             FluidStack fluid;
             if (!message.obj.hasNoTags()) {
                 ItemStack fakeItem = new ItemStack(message.obj);
-                fluid = com.glodblock.github.common.item.fake.FakeItemRegister.getStack(fakeItem);
+                fluid = getFluidFromFakeItem(fakeItem);
                 if (fluid == null) return;
                 fluid.amount = 1000;
             } else return;
@@ -440,6 +441,16 @@ public class CPacketMEMonitorableAction implements IMessage {
                 } catch (final IOException e) {
                     AELog.debug(e);
                 }
+            }
+        }
+        
+        private static FluidStack getFluidFromFakeItem(ItemStack fakeItem) {
+            try {
+                Class<?> registerClass = Class.forName("com.glodblock.github.common.item.fake.FakeItemRegister");
+                Method getStackMethod = registerClass.getMethod("getStack", ItemStack.class);
+                return (FluidStack) getStackMethod.invoke(null, fakeItem);
+            } catch (Exception e) {
+                return null;
             }
         }
     }

@@ -3,7 +3,7 @@
   "modid": "terminal_interaction_integration",
   "name": "Terminal Interaction Integration",
   "description": "AE2 terminal interaction integration mod",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "mcversion": "${mcversion}",
   "url": "",
   "updateUrl": "",
