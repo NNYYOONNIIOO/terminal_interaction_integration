@@ -8,7 +8,9 @@
   "mixins": [
     "ae2.MixinGridStorageCache",
     "ae2.MixinNetworkMonitor",
-    "ae2.MixinContainerMEMonitorable"
+    "ae2.MixinContainerMEMonitorable",
+    "ae2.MixinUpgradeInventory",
+    "ae2.MixinUpgradeInvFilter"
   ],
   "client": [
     "ae2.MixinGuiMEMonitorable"
