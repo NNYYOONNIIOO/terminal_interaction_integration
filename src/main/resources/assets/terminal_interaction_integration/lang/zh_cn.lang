@@ -1,0 +1,4 @@
+terminal_interaction_integration.name=终端交互集成
+terminal_interaction_integration.action.deposit=存入
+terminal_interaction_integration.action.fill=填充
+terminal_interaction_integration.action.extract=提取

@@ -1,0 +1,1 @@
+This mod provides the ability to interact with the ME terminal and display virtual fluids, allowing developers to use its API to register virtual fluids and interact with them, making the game feel more modern.
