@@ -41,6 +41,10 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Shadow
     protected abstract void postChange(boolean add, Iterable<T> changes, IActionSource src);
 
+    @Shadow
+    @Final
+    private IItemList<T> cachedList;
+
     @Unique
     private final Map<String, ResourceFakeMonitor> resourceMonitors = new ConcurrentHashMap<>();
 
@@ -55,6 +59,9 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
                 ResourceFakeMonitor monitor = new ResourceFakeMonitor(gridCache, resourceChannel);
                 resourceMonitors.put(providerName, monitor);
                 TerminalInteractionRegistry.registerResourceMonitor(providerName, monitor);
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                final IItemList<IAEItemStack> cachedItems = (IItemList) this.cachedList;
+                monitor.getAvailableItems(cachedItems);
             }
         }
     }
