@@ -20,7 +20,9 @@ import nyonio.terminal_interaction_integration.api.IResourceProvider;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
@@ -29,6 +31,10 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
     private final IResourceProvider provider;
     private final IStorageChannel<?> resourceChannel;
     private final GridStorageCache gridCache;
+    private final Object availableItemsCacheLock = new Object();
+    private volatile List<IAEItemStack> availableItemsCache;
+    private volatile IAEItemStack availableItemsDropStack;
+    private volatile boolean availableItemsCacheDirty = true;
 
     public ResourceFakeMonitor(final GridStorageCache grid, final IStorageChannel<?> resourceChannel) {
         this.gridCache = grid;
@@ -117,33 +123,20 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
     public IItemList<IAEItemStack> getAvailableItems(IItemList<IAEItemStack> list) {
         if (list == null) return list;
         if (provider == null) return list;
-        
-        IPacketType packetType = provider.getPacketType();
-        if (packetType == null) return list;
-        
+
+        final IPacketType packetType = provider.getPacketType();
+        if (packetType == null || monitor == null) return list;
+
         try {
-            IAEItemStack dropStack = packetType.createAEStack(1);
+            final List<IAEItemStack> cachedItems = getAvailableItemsSnapshot(packetType);
+            final IAEItemStack dropStack = availableItemsDropStack;
             if (dropStack != null) {
                 list.findFuzzy(dropStack, appeng.api.config.FuzzyMode.IGNORE_ALL)
                     .forEach(i -> i.setStackSize(0));
             }
-            
-            IItemList storageList = monitor.getStorageList();
-            
-            if (storageList != null && !storageList.isEmpty()) {
-                for (Object obj : storageList) {
-                    if (obj instanceof IAEStack) {
-                        IAEStack rs = (IAEStack) obj;
-                        long amount = rs.getStackSize();
-                        if (amount > 0) {
-                            IAEItemStack display = packetType.createAEStack(amount);
-                            if (display != null) {
-                                display.setStackSize(amount);
-                                list.addStorage(display);
-                            }
-                        }
-                    }
-                }
+
+            for (IAEItemStack display : cachedItems) {
+                list.addStorage(display.copy());
             }
         } catch (Exception e) {
             nyonio.terminal_interaction_integration.TerminalInteractionIntegration.getLogger().error(
@@ -152,6 +145,51 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
         }
 
         return list;
+    }
+
+    private List<IAEItemStack> getAvailableItemsSnapshot(final IPacketType packetType) {
+        List<IAEItemStack> cached = availableItemsCache;
+        if (!availableItemsCacheDirty && cached != null) {
+            return cached;
+        }
+
+        synchronized (availableItemsCacheLock) {
+            cached = availableItemsCache;
+            if (!availableItemsCacheDirty && cached != null) {
+                return cached;
+            }
+
+            final List<IAEItemStack> rebuilt = new ArrayList<>();
+            availableItemsDropStack = packetType.createAEStack(1);
+
+            final IItemList storageList = monitor.getStorageList();
+            if (storageList != null && !storageList.isEmpty()) {
+                for (Object obj : storageList) {
+                    if (!(obj instanceof IAEStack)) continue;
+
+                    final IAEStack resourceStack = (IAEStack) obj;
+                    final long amount = resourceStack.getStackSize();
+                    if (amount <= 0) continue;
+
+                    final IAEItemStack display = packetType.createAEStack(amount);
+                    if (display != null) {
+                        display.setStackSize(amount);
+                        rebuilt.add(display);
+                    }
+                }
+            }
+
+            availableItemsCache = rebuilt;
+            availableItemsCacheDirty = false;
+            return rebuilt;
+        }
+    }
+
+    public void invalidateAvailableItems() {
+        synchronized (availableItemsCacheLock) {
+            availableItemsCacheDirty = true;
+            availableItemsCache = null;
+        }
     }
 
     @Override

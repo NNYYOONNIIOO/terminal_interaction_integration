@@ -62,6 +62,9 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Override
     public void resourcePostChange(boolean add, Iterable<T> changes, IActionSource src) {
         if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel) {
+            for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
+                monitor.invalidateAvailableItems();
+            }
             this.postChange(add, changes, src);
         }
     }
