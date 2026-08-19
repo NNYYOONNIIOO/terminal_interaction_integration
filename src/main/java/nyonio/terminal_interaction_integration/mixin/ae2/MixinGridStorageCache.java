@@ -82,7 +82,8 @@ public abstract class MixinGridStorageCache {
                 );
                 
                 if (itemMonitor instanceof IResourceNetworkMonitor) {
-                    ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor).resourcePostChange(true, changes, src);
+                    ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor)
+                        .resourcePostChange(provider.getName(), true, changes, src);
                 }
             }
         } catch (Exception e) {
@@ -123,7 +124,8 @@ public abstract class MixinGridStorageCache {
                 );
                 
                 if (itemMonitor instanceof IResourceNetworkMonitor) {
-                    ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor).resourcePostChange(upOrDown > 0, changes, src);
+                    ((IResourceNetworkMonitor<IAEItemStack>) itemMonitor)
+                        .resourcePostChange(provider.getName(), upOrDown > 0, changes, src);
                 }
             }
         } catch (Exception e) {

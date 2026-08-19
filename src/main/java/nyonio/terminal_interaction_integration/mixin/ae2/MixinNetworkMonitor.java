@@ -20,8 +20,11 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.annotation.Nonnull;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -68,9 +71,29 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
 
     @Override
     public void resourcePostChange(boolean add, Iterable<T> changes, IActionSource src) {
+        resourcePostChange(null, add, changes, src);
+    }
+
+    @Override
+    public void resourcePostChange(String providerName, boolean add, Iterable<T> changes, IActionSource src) {
         if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel) {
-            for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
-                monitor.invalidateAvailableItems();
+            final List<T> changeList = new ArrayList<>();
+            if (changes != null) {
+                for (T change : changes) {
+                    changeList.add(change);
+                }
+            }
+
+            final ResourceFakeMonitor monitor = providerName == null
+                ? null : resourceMonitors.get(providerName);
+            if (monitor != null) {
+                @SuppressWarnings("unchecked")
+                final Iterable<IAEItemStack> itemChanges = (Iterable<IAEItemStack>) (Iterable<?>) changeList;
+                monitor.applyAvailableItemsChanges(add, itemChanges);
+            } else {
+                for (ResourceFakeMonitor resourceMonitor : resourceMonitors.values()) {
+                    resourceMonitor.invalidateAvailableItems();
+                }
             }
 
             // Keep the virtual item update independent from the originating
@@ -79,16 +102,35 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
             ResourceFakeMonitor.FakeMonitorSource virtualSource =
                 ResourceFakeMonitor.FakeMonitorSource.release(src);
             try {
-                this.postChange(add, changes, virtualSource);
+                this.postChange(add, changeList, virtualSource);
             } finally {
                 virtualSource.recycle();
             }
         }
     }
 
+    @Inject(
+        method = "forceUpdate",
+        at = @At(
+            value = "INVOKE",
+            target = "Lappeng/api/storage/data/IItemList;resetStatus()V",
+            shift = At.Shift.AFTER
+        )
+    )
+    private void tii$restoreVirtualResourcesAfterReset(final CallbackInfo ci) {
+        if (resourceMonitors.isEmpty() || !(this.myChannel instanceof IItemStorageChannel)) return;
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        final IItemList<IAEItemStack> cachedItems = (IItemList) this.cachedList;
+        for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
+            monitor.restoreAvailableItems(cachedItems);
+        }
+    }
+
     @Inject(method = "getAvailableItems", at = @At("TAIL"))
     public void getAvailableItems(final IItemList<T> out, final CallbackInfoReturnable<IItemList<T>> cir) {
-        if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel) {
+        if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel
+            && out != this.cachedList) {
             try {
                 @SuppressWarnings("unchecked")
                 IItemList<IAEItemStack> itemOut = (IItemList<IAEItemStack>) out;

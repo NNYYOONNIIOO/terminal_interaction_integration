@@ -10,6 +10,10 @@ public interface IResourceNetworkMonitor<T extends IAEStack<T>> {
     void initResourceMonitor(GridStorageCache gridCache, IStorageChannel<?> resourceChannel);
     
     void resourcePostChange(boolean add, Iterable<T> changes, IActionSource src);
+
+    default void resourcePostChange(String providerName, boolean add, Iterable<T> changes, IActionSource src) {
+        resourcePostChange(add, changes, src);
+    }
     
     void addToAvailableItems(appeng.api.storage.data.IItemList<IAEItemStack> out);
 }

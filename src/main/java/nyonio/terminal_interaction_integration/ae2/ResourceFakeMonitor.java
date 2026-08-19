@@ -197,6 +197,65 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
         }
     }
 
+    public void applyAvailableItemsChanges(final boolean add, final Iterable<IAEItemStack> changes) {
+        if (changes == null) return;
+
+        synchronized (availableItemsCacheLock) {
+            if (availableItemsCacheDirty || availableItemsCache == null) return;
+
+            final List<IAEItemStack> updated = new ArrayList<>(availableItemsCache);
+            for (IAEItemStack change : changes) {
+                if (change == null || change.getStackSize() == 0) continue;
+
+                final long delta = add ? change.getStackSize() : -change.getStackSize();
+                IAEItemStack existing = null;
+                for (IAEItemStack cached : updated) {
+                    if (cached.equals(change)) {
+                        existing = cached;
+                        break;
+                    }
+                }
+
+                if (existing == null) {
+                    if (delta > 0) {
+                        final IAEItemStack copy = change.copy();
+                        copy.setStackSize(delta);
+                        updated.add(copy);
+                    }
+                } else {
+                    existing.incStackSize(delta);
+                    if (existing.getStackSize() <= 0) {
+                        updated.remove(existing);
+                    }
+                }
+            }
+            availableItemsCache = updated;
+        }
+    }
+
+    public void restoreAvailableItems(final IItemList<IAEItemStack> list) {
+        if (list == null || provider == null) return;
+
+        final IPacketType packetType = provider.getPacketType();
+        if (packetType == null || monitor == null) return;
+
+        try {
+            final List<IAEItemStack> cachedItems = getAvailableItemsSnapshot(packetType);
+            for (IAEItemStack display : cachedItems) {
+                final IAEItemStack existing = list.findPrecise(display);
+                if (existing != null) {
+                    existing.setStackSize(display.getStackSize());
+                } else {
+                    list.addStorage(display.copy());
+                }
+            }
+        } catch (Exception e) {
+            nyonio.terminal_interaction_integration.TerminalInteractionIntegration.getLogger().error(
+                "[TII] Error restoring resources for: " + provider.getName(), e
+            );
+        }
+    }
+
     @Override
     public IStorageChannel<IAEItemStack> getChannel() {
         return null;
