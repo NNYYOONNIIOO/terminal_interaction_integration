@@ -136,7 +136,12 @@ public class ResourceFakeMonitor implements IMEMonitor<IAEItemStack> {
             }
 
             for (IAEItemStack display : cachedItems) {
-                list.addStorage(display.copy());
+                IAEItemStack existing = list.findPrecise(display);
+                if (existing != null) {
+                    existing.setStackSize(display.getStackSize());
+                } else {
+                    list.addStorage(display.copy());
+                }
             }
         } catch (Exception e) {
             nyonio.terminal_interaction_integration.TerminalInteractionIntegration.getLogger().error(
