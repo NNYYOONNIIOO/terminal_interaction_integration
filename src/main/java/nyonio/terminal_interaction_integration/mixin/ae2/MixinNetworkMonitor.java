@@ -51,6 +51,9 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Unique
     private final Map<String, ResourceFakeMonitor> resourceMonitors = new ConcurrentHashMap<>();
 
+    @Unique
+    private boolean tii$inForceUpdate;
+
     @Override
     public void initResourceMonitor(GridStorageCache gridCache, IStorageChannel<?> resourceChannel) {
         if (this.myChannel instanceof IItemStorageChannel) {
@@ -127,10 +130,20 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
         }
     }
 
+    @Inject(method = "forceUpdate", at = @At("HEAD"))
+    private void tii$beginForceUpdate(final CallbackInfo ci) {
+        this.tii$inForceUpdate = true;
+    }
+
+    @Inject(method = "forceUpdate", at = @At("RETURN"))
+    private void tii$endForceUpdate(final CallbackInfo ci) {
+        this.tii$inForceUpdate = false;
+    }
+
     @Inject(method = "getAvailableItems", at = @At("TAIL"))
     public void getAvailableItems(final IItemList<T> out, final CallbackInfoReturnable<IItemList<T>> cir) {
         if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel
-            && out != this.cachedList) {
+            && !this.tii$inForceUpdate) {
             try {
                 @SuppressWarnings("unchecked")
                 IItemList<IAEItemStack> itemOut = (IItemList<IAEItemStack>) out;
