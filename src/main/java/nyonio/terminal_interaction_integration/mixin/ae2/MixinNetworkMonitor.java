@@ -65,7 +65,17 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
             for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
                 monitor.invalidateAvailableItems();
             }
-            this.postChange(add, changes, src);
+
+            // Keep the virtual item update independent from the originating
+            // resource update. Reusing the source can make AE2 classify this as
+            // a nested update and schedule an expensive full forceUpdate().
+            ResourceFakeMonitor.FakeMonitorSource virtualSource =
+                ResourceFakeMonitor.FakeMonitorSource.release(src);
+            try {
+                this.postChange(add, changes, virtualSource);
+            } finally {
+                virtualSource.recycle();
+            }
         }
     }
 
