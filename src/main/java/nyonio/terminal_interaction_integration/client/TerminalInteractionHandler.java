@@ -140,6 +140,16 @@ public class TerminalInteractionHandler {
         );
         NetworkHandler.instance().sendToServer(p);
     }
+
+    /** Deposits the complete held custom-container stack through TII's native path. */
+    private static void sendCustomContainerDeposit() {
+        TerminalInteractionIntegration.getNetwork().sendToServer(
+            new CPacketMEMonitorableAction(
+                CPacketMEMonitorableAction.CUSTOM_DEPOSIT,
+                new NBTTagCompound()
+            )
+        );
+    }
     
     private static void sendAEPickup(GuiMEMonitorable gui, IAEItemStack aeStack) {
         AEBaseContainer baseContainer = (AEBaseContainer) gui.inventorySlots;
@@ -350,7 +360,7 @@ public class TerminalInteractionHandler {
                 IPacketType packetType = TerminalInteractionRegistry.getPacketType(aeStack.asItemStackRepresentation());
                 
                 if (!isRightClick) {
-                    sendAEDeposit(gui, aeStack);
+                    sendCustomContainerDeposit();
                     isProcessingInteraction = true;
                     event.setCanceled(true);
                     return;
@@ -393,7 +403,7 @@ public class TerminalInteractionHandler {
             boolean isVirtualPacket = hoverPacketType != null;
             
             if (!isRightClick) {
-                sendAEDeposit(gui, aeStack);
+                sendCustomContainerDeposit();
                 isProcessingInteraction = true;
                 event.setCanceled(true);
                 return;
