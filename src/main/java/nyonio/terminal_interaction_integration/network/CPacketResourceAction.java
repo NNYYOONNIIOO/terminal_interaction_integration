@@ -178,7 +178,7 @@ public class CPacketResourceAction implements IMessage {
             }
             
             long injected = handler.inject(container, networkAmount, source);
-            
+
             player.inventory.setItemStack(container);
             updateHeld(player);
         }
@@ -211,26 +211,44 @@ public class CPacketResourceAction implements IMessage {
                 return;
             }
             
-            ItemStack heldItem = player.inventory.getItemStack();
-            
-            if (heldItem == null || heldItem.isEmpty()) return;
+            ItemStack cursorStack = player.inventory.getItemStack();
+
+            if (cursorStack == null || cursorStack.isEmpty()) return;
+
+            ItemStack heldItem = cursorStack.copy();
+            heldItem.setCount(1);
             
             if (!handler.canHandle(heldItem)) return;
             
+            boolean changed = false;
             if (message.isFilling) {
                 long extracted = handler.extract(heldItem, message.currentAmount, source);
                 if (extracted > 0) {
-                    injectToNetworkResource(grid, provider, extracted, source);
+                    changed = injectToNetworkResource(grid, provider, extracted, source) > 0;
                 }
             } else {
                 long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
                 if (networkAmount > 0) {
-                    handler.inject(heldItem, networkAmount, source);
+                    changed = handler.inject(heldItem, networkAmount, source) > 0;
                 }
             }
+
+            if (!changed) return;
             
             long newAmount = handler.getStoredAmount(heldItem);
-            
+
+            if (cursorStack.getCount() <= 1) {
+                player.inventory.setItemStack(heldItem);
+            } else {
+                ItemStack remaining = cursorStack.copy();
+                remaining.shrink(1);
+                player.inventory.setItemStack(remaining);
+
+                if (!heldItem.isEmpty() && !player.inventory.addItemStackToInventory(heldItem)) {
+                    player.dropItem(heldItem, false);
+                }
+            }
+
             updateHeld(player);
             
             byte[] tagBytes = null;
