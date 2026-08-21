@@ -308,8 +308,14 @@ public class CPacketMEMonitorableAction implements IMessage {
             if (grid == null) return;
             IActionSource source = getSource(player);
 
-            ItemStack h = player.inventory.getItemStack();
-            if (h.isEmpty()) return;
+            ItemStack cursorStack = player.inventory.getItemStack();
+            if (cursorStack.isEmpty()) return;
+
+            // A terminal click represents one container operation. Work on a
+            // one-item copy so a stacked set of containers is never mutated as
+            // a whole.
+            ItemStack h = cursorStack.copy();
+            h.setCount(1);
 
             String typeName = message.obj.getString("type");
             long amount = message.obj.getLong("amount");
@@ -327,27 +333,57 @@ public class CPacketMEMonitorableAction implements IMessage {
             if (!handler.canHandle(h)) return;
 
             long currentAmount = handler.getStoredAmount(h);
+            boolean changed = false;
 
             if (hasContent && currentAmount > 0) {
                 long toExtract = currentAmount;
-                
+
                 long simulatedInject = injectToNetworkResourceSimulate(grid, provider, toExtract, source);
                 if (simulatedInject <= 0) return;
-                
-                long extracted = handler.extract(h, toExtract, source);
+
+                long transferAmount = Math.min(toExtract, simulatedInject);
+                long extracted = handler.extract(h, transferAmount, source);
                 if (extracted > 0) {
-                    injectToNetworkResource(grid, provider, extracted, source);
+                    long injected = injectToNetworkResource(grid, provider, extracted, source);
+                    if (injected < extracted) {
+                        // A concurrent network change may make the real insert
+                        // smaller than the simulation. Restore the remainder
+                        // to the one-item working copy before returning it.
+                        handler.inject(h, extracted - injected, source);
+                    }
+                    changed = injected > 0;
                 }
             } else if (!hasContent) {
                 long maxCapacity = handler.getMaxCapacity(h);
                 long availableSpace = maxCapacity - currentAmount;
                 if (availableSpace <= 0) return;
-                
+
                 long toRequest = Math.min(amount, availableSpace);
-                
+
                 long networkAmount = extractFromNetworkResource(grid, provider, toRequest, source);
                 if (networkAmount > 0) {
-                    handler.inject(h, networkAmount, source);
+                    long injected = handler.inject(h, networkAmount, source);
+                    if (injected < networkAmount) {
+                        // Do not destroy resources when a container accepts less
+                        // than the amount removed from the network.
+                        injectToNetworkResource(grid, provider,
+                                networkAmount - injected, source);
+                    }
+                    changed = injected > 0;
+                }
+            }
+
+            if (!changed) return;
+
+            if (cursorStack.getCount() <= 1) {
+                player.inventory.setItemStack(h);
+            } else {
+                ItemStack remaining = cursorStack.copy();
+                remaining.shrink(1);
+                player.inventory.setItemStack(remaining);
+
+                if (!h.isEmpty() && !player.inventory.addItemStackToInventory(h)) {
+                    player.dropItem(h, false);
                 }
             }
 
