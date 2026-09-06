@@ -33,7 +33,8 @@ public class TerminalInteractionIntegration
     public void preInit(FMLPreInitializationEvent event)
     {
         logger = event.getModLog();
-        
+        TIIConfig.load(event.getSuggestedConfigurationFile());
+
         network = NetworkRegistry.INSTANCE.newSimpleChannel(CHANNEL);
         network.registerMessage(CPacketResourceAction.Handler.class, CPacketResourceAction.class, 0, Side.SERVER);
         network.registerMessage(SPacketResourceUpdate.Handler.class, SPacketResourceUpdate.class, 1, Side.CLIENT);

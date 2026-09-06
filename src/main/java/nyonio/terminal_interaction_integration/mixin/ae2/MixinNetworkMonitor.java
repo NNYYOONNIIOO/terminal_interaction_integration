@@ -8,6 +8,7 @@ import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
 import appeng.me.cache.GridStorageCache;
 import appeng.me.cache.NetworkMonitor;
+import nyonio.terminal_interaction_integration.TIIConfig;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IResourceNetworkMonitor;
@@ -54,6 +55,18 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Unique
     private boolean tii$inForceUpdate;
 
+    @Unique
+    private final List<Boolean> tii$pendingAdds = new ArrayList<>();
+
+    @Unique
+    private final List<List<IAEItemStack>> tii$pendingChanges = new ArrayList<>();
+
+    @Unique
+    private final List<IActionSource> tii$pendingSources = new ArrayList<>();
+
+    @Unique
+    private int tii$resourceUpdateTickCounter;
+
     @Override
     public void initResourceMonitor(GridStorageCache gridCache, IStorageChannel<?> resourceChannel) {
         if (this.myChannel instanceof IItemStorageChannel) {
@@ -90,24 +103,28 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
             final ResourceFakeMonitor monitor = providerName == null
                 ? null : resourceMonitors.get(providerName);
             if (monitor != null) {
-                @SuppressWarnings("unchecked")
-                final Iterable<IAEItemStack> itemChanges = (Iterable<IAEItemStack>) (Iterable<?>) changeList;
+                final List<IAEItemStack> itemChanges = new ArrayList<>();
+                for (T change : changeList) {
+                    if (change instanceof IAEItemStack && change.getStackSize() != 0) {
+                        itemChanges.add((IAEItemStack) change);
+                    }
+                }
+                if (itemChanges.isEmpty()) return;
+
                 monitor.applyAvailableItemsChanges(add, itemChanges);
+                this.tii$pendingAdds.add(add);
+                this.tii$pendingChanges.add(itemChanges);
+                this.tii$pendingSources.add(src);
+
+                if (TIIConfig.getVirtualResourceUpdateIntervalTicks() <= 1) {
+                    this.tii$flushPendingResourceChanges();
+                }
             } else {
                 for (ResourceFakeMonitor resourceMonitor : resourceMonitors.values()) {
                     resourceMonitor.invalidateAvailableItems();
                 }
-            }
 
-            // Keep the virtual item update independent from the originating
-            // resource update. Reusing the source can make AE2 classify this as
-            // a nested update and schedule an expensive full forceUpdate().
-            ResourceFakeMonitor.FakeMonitorSource virtualSource =
-                ResourceFakeMonitor.FakeMonitorSource.release(src);
-            try {
-                this.postChange(add, changeList, virtualSource);
-            } finally {
-                virtualSource.recycle();
+                this.tii$postVirtualChange(add, changeList, src);
             }
         }
     }
@@ -132,12 +149,75 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
 
     @Inject(method = "forceUpdate", at = @At("HEAD"))
     private void tii$beginForceUpdate(final CallbackInfo ci) {
+        this.tii$flushPendingResourceChanges();
+        this.tii$resourceUpdateTickCounter = 0;
         this.tii$inForceUpdate = true;
     }
 
     @Inject(method = "forceUpdate", at = @At("RETURN"))
     private void tii$endForceUpdate(final CallbackInfo ci) {
         this.tii$inForceUpdate = false;
+    }
+
+    @Inject(method = "onTick", at = @At("HEAD"))
+    private void tii$updateVirtualResources(final CallbackInfo ci) {
+        if (this.tii$pendingChanges.isEmpty()) {
+            this.tii$resourceUpdateTickCounter = 0;
+            return;
+        }
+
+        final int interval = TIIConfig.getVirtualResourceUpdateIntervalTicks();
+        if (interval <= 1 || ++this.tii$resourceUpdateTickCounter >= interval) {
+            this.tii$resourceUpdateTickCounter = 0;
+            this.tii$flushPendingResourceChanges();
+        }
+    }
+
+    @Unique
+    private void tii$flushPendingResourceChanges() {
+        if (this.tii$pendingChanges.isEmpty()) return;
+
+        final List<IAEItemStack> displayChanges = new ArrayList<>();
+        final IActionSource source = this.tii$pendingSources.get(0);
+
+        for (int i = 0; i < this.tii$pendingChanges.size(); i++) {
+            final boolean add = this.tii$pendingAdds.get(i);
+            for (IAEItemStack change : this.tii$pendingChanges.get(i)) {
+                if (change == null || change.getStackSize() == 0) continue;
+
+                final IAEItemStack effectiveChange = change.copy();
+                long delta = effectiveChange.getStackSize();
+                if (!add) delta = -delta;
+                effectiveChange.setStackSize(delta);
+                displayChanges.add(effectiveChange);
+            }
+        }
+
+        this.tii$pendingAdds.clear();
+        this.tii$pendingChanges.clear();
+        this.tii$pendingSources.clear();
+
+        if (!displayChanges.isEmpty()) {
+            this.tii$postVirtualChange(true, displayChanges, source);
+        }
+    }
+
+    @Unique
+    private void tii$postVirtualChange(boolean add, Iterable<? extends IAEStack<?>> changes, IActionSource src) {
+        final List<T> typedChanges = new ArrayList<>();
+        for (IAEStack<?> change : changes) {
+            @SuppressWarnings("unchecked")
+            final T typedChange = (T) change;
+            typedChanges.add(typedChange);
+        }
+
+        ResourceFakeMonitor.FakeMonitorSource virtualSource =
+            ResourceFakeMonitor.FakeMonitorSource.release(src);
+        try {
+            this.postChange(add, typedChanges, virtualSource);
+        } finally {
+            virtualSource.recycle();
+        }
     }
 
     @Inject(method = "getAvailableItems", at = @At("TAIL"))
