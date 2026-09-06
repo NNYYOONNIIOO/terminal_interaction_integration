@@ -7,7 +7,7 @@ import java.io.File;
 /** Configuration shared by the library and resource-provider addons. */
 public final class TIIConfig {
     private static final String CATEGORY_TERMINAL = "terminal";
-    private static final int DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS = 5;
+    private static final int DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS = 10;
 
     private static int virtualResourceUpdateIntervalTicks =
         DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS;
@@ -28,7 +28,7 @@ public final class TIIConfig {
             1,
             Integer.MAX_VALUE,
             "How many server ticks may pass before virtual resource amounts are refreshed. "
-                + "The default is 5 ticks (0.25 seconds)."
+                + "The default is 10 ticks (0.5 seconds)."
         );
         if (configuration.hasChanged()) {
             configuration.save();
