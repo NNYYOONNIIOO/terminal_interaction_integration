@@ -1,41 +1,25 @@
 package nyonio.terminal_interaction_integration;
 
-import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.common.ForgeConfigSpec;
 
-import java.io.File;
-
-/** Configuration shared by the library and resource-provider addons. */
+/** Server-side settings shared with addons. */
 public final class TIIConfig {
-    private static final String CATEGORY_TERMINAL = "terminal";
-    private static final int DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS = 10;
+    public static final ForgeConfigSpec SPEC;
+    private static final ForgeConfigSpec.IntValue UPDATE_INTERVAL;
 
-    private static int virtualResourceUpdateIntervalTicks =
-        DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS;
+    static {
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+        builder.push("terminal");
+        UPDATE_INTERVAL = builder.comment("Server ticks between virtual resource updates (default: 10).")
+                .defineInRange("virtualResourceUpdateIntervalTicks", 10, 1, Integer.MAX_VALUE);
+        builder.pop();
+        SPEC = builder.build();
+    }
 
     private TIIConfig() {
     }
 
-    public static void load(final File file) {
-        final Configuration configuration = new Configuration(file);
-        configuration.addCustomCategoryComment(
-            CATEGORY_TERMINAL,
-            "Settings for virtual resources displayed in ME terminals."
-        );
-        virtualResourceUpdateIntervalTicks = configuration.getInt(
-            "virtualResourceUpdateIntervalTicks",
-            CATEGORY_TERMINAL,
-            DEFAULT_VIRTUAL_RESOURCE_UPDATE_INTERVAL_TICKS,
-            1,
-            Integer.MAX_VALUE,
-            "How many server ticks may pass before virtual resource amounts are refreshed. "
-                + "The default is 10 ticks (0.5 seconds)."
-        );
-        if (configuration.hasChanged()) {
-            configuration.save();
-        }
-    }
-
     public static int getVirtualResourceUpdateIntervalTicks() {
-        return virtualResourceUpdateIntervalTicks;
+        return UPDATE_INTERVAL.get();
     }
 }

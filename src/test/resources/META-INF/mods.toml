@@ -1,0 +1,15 @@
+modLoader="javafml"
+loaderVersion="[36,)"
+license="LGPL-3.0"
+
+[[mods]]
+modId="tii_smoketest"
+version="1"
+displayName="TII Registration Smoke Test"
+
+[[dependencies.tii_smoketest]]
+modId="terminal_interaction_integration"
+mandatory=true
+versionRange="[1,)"
+ordering="AFTER"
+side="BOTH"

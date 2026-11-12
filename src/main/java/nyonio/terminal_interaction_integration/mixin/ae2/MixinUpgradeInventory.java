@@ -1,8 +1,7 @@
 package nyonio.terminal_interaction_integration.mixin.ae2;
 
-import appeng.api.config.Upgrades;
-import appeng.api.implementations.items.IUpgradeModule;
 import appeng.parts.automation.UpgradeInventory;
+import appeng.util.inv.IAEAppEngInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import nyonio.terminal_interaction_integration.api.IUpgradeModuleHost;
@@ -12,35 +11,25 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(value = UpgradeInventory.class, remap = false)
 public abstract class MixinUpgradeInventory implements IUpgradeModuleHost {
-    @Shadow(remap = false)
-    @Final
-    private appeng.util.inv.IAEAppEngInventory parent;
+    @Shadow @Final private IAEAppEngInventory parent;
 
-    @Inject(method = "updateUpgradeInfo", at = @At("HEAD"))
-    private void terminal_interaction_integration$clear(CallbackInfo ci) {
+    // Registered custom cards do not represent any of AE2's built-in upgrade
+    // enum values. Skip them while AE2 calculates its own upgrade counters.
+    @ModifyVariable(method = "updateUpgradeInfo", at = @At("STORE"), index = 2)
+    private ItemStack tii$skipCustomUpgrade(ItemStack stack) {
+        return UpgradeModuleRegistration.isRegistered(stack) ? ItemStack.EMPTY : stack;
     }
 
-    @Redirect(method = "updateUpgradeInfo", at = @At(value = "INVOKE", target = "Lappeng/api/implementations/items/IUpgradeModule;getType(Lnet/minecraft/item/ItemStack;)Lappeng/api/config/Upgrades;"), remap = false)
-    private Upgrades terminal_interaction_integration$redirectType(IUpgradeModule module, ItemStack stack) {
-        if (UpgradeModuleRegistration.isRegistered(stack)) return Upgrades.STICKY;
-        return module.getType(stack);
-    }
-
-    @Override
-    @Unique
+    @Override @Unique
     public int terminalInteractionIntegration$getInstalled(Item item) {
-        UpgradeInventory self = (UpgradeInventory) (Object) this;
-        return UpgradeModuleRegistration.countInstalled(self, item);
+        return UpgradeModuleRegistration.countInstalled((UpgradeInventory) (Object) this, item);
     }
 
-    @Override
-    @Unique
+    @Override @Unique
     public boolean terminalInteractionIntegration$isInterfaceDevice() {
         if (parent == null) return false;
         String name = parent.getClass().getName();

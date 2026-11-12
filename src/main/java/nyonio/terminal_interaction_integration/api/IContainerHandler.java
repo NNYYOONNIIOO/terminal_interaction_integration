@@ -2,8 +2,12 @@ package nyonio.terminal_interaction_integration.api;
 
 import appeng.api.networking.security.IActionSource;
 import net.minecraft.item.ItemStack;
-import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 
+/**
+ * Reads and mutates one container stack. The library passes one-item copies
+ * when interacting with a stack. Mutations must only affect that stack: a
+ * copy may be used to determine the amount a container will accept.
+ */
 public interface IContainerHandler {
     boolean canHandle(ItemStack container);
     

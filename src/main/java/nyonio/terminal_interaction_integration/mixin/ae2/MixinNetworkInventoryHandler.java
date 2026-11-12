@@ -1,128 +1,64 @@
 package nyonio.terminal_interaction_integration.mixin.ae2;
 
 import appeng.api.config.Actionable;
-import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
-import appeng.me.cache.GridStorageCache;
-import appeng.me.cache.NetworkMonitor;
 import appeng.me.cache.SecurityCache;
 import appeng.me.storage.NetworkInventoryHandler;
-import net.minecraft.item.ItemStack;
-import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
-import nyonio.terminal_interaction_integration.api.IPacketType;
+import nyonio.terminal_interaction_integration.ae2.VirtualInventory;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
-import nyonio.terminal_interaction_integration.ae2.ResourceFakeMonitor;
 import org.objectweb.asm.Opcodes;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@SuppressWarnings({"unchecked", "rawtypes"})
-@Mixin(value = NetworkInventoryHandler.class, remap = false, priority = 500)
+@Mixin(value = NetworkInventoryHandler.class, remap = false)
 public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
+    @Shadow @Final private IStorageChannel<T> myChannel;
+    @Shadow @Final private SecurityCache security;
+    @Shadow protected abstract void surface(NetworkInventoryHandler<T> handler, Actionable mode);
 
-    private final Map<String, ResourceFakeMonitor> tii$resourceMonitors = new HashMap<>();
-    private GridStorageCache tii$storageCache;
-    private SecurityCache tii$security;
-    private boolean tii$initialized = false;
-
-    @Shadow
-    protected abstract void surface(NetworkInventoryHandler<T> networkInventoryHandler, Actionable type);
-
-    @Shadow
-    protected abstract boolean diveList(NetworkInventoryHandler<T> networkInventoryHandler, Actionable type);
-
-    @Inject(method = "<init>", at = @At("TAIL"))
-    private void onInit(final IStorageChannel<?> chan, final SecurityCache security, final CallbackInfo ci) {
-        if (chan instanceof IItemStorageChannel) {
-            tii$security = security;
-        }
-    }
-
-    private void tii$ensureInitialized() {
-        if (tii$initialized) return;
-        tii$initialized = true;
-        if (tii$security == null) return;
+    @SuppressWarnings("unchecked")
+    @Inject(method = "injectItems", at = @At(value = "FIELD",
+            target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;",
+            opcode = Opcodes.GETFIELD, ordinal = 0), cancellable = true)
+    private void tii$insert(T input, Actionable mode, IActionSource source, CallbackInfoReturnable<T> ci) {
+        if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)
+                || source instanceof VirtualInventory.VirtualSource) return;
+        IResourceProvider provider = TerminalInteractionRegistry.getProviderForPacket(input.asItemStackRepresentation());
+        if (provider == null) return;
         try {
-            IGrid grid = tii$security.getGrid();
-            if (grid == null) return;
-            tii$storageCache = (GridStorageCache) grid.getCache(GridStorageCache.class);
-            if (tii$storageCache == null) return;
-            for (IResourceProvider provider : TerminalInteractionRegistry.getAllProviders()) {
-                IStorageChannel<?> resourceChannel = provider.getStorageChannel();
-                if (resourceChannel != null) {
-                    ResourceFakeMonitor monitor = new ResourceFakeMonitor(tii$storageCache, resourceChannel);
-                    tii$resourceMonitors.put(provider.getName(), monitor);
-                }
-            }
-        } catch (Exception ignored) {
-            // Grid may be in invalid state during destroy/rebuild, silently skip
+            IStorageGrid grid = security.getGrid().getCache(IStorageGrid.class);
+            IAEItemStack result = VirtualInventory.insertItem(grid, provider, (IAEItemStack) input, mode, source);
+            ci.setReturnValue((T) result);
+        } finally {
+            surface((NetworkInventoryHandler<T>) (Object) this, mode);
         }
     }
 
-    @Inject(method = "injectItems", at = @At(value = "FIELD", target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;", opcode = Opcodes.GETFIELD), cancellable = true)
-    private void onInjectItems(final T input, final Actionable mode, final IActionSource src, final CallbackInfoReturnable<T> cir) {
-        if (input == null) return;
-        if (!(input instanceof IAEItemStack)) return;
-        if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
-
-        tii$ensureInitialized();
-        IAEItemStack itemStack = (IAEItemStack) input;
-        ItemStack itemRep = itemStack.asItemStackRepresentation();
-
-        for (Map.Entry<String, ResourceFakeMonitor> entry : tii$resourceMonitors.entrySet()) {
-            String providerName = entry.getKey();
-            ResourceFakeMonitor monitor = entry.getValue();
-            
-            IResourceProvider provider = TerminalInteractionRegistry.getProvider(providerName);
-            if (provider == null) continue;
-            
-            IPacketType packetType = provider.getPacketType();
-            if (packetType != null && packetType.isPacket(itemRep)) {
-                IAEItemStack result = monitor.injectItems(itemStack, mode, src);
-                this.surface(null, mode);
-                cir.setReturnValue((T) result);
-                return;
-            }
-        }
-    }
-
-    @Inject(method = "extractItems", at = @At(value = "FIELD", target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;", opcode = Opcodes.GETFIELD), cancellable = true)
-    private void onExtractItems(final T request, final Actionable mode, final IActionSource src, final CallbackInfoReturnable<T> cir) {
-        if (request == null) return;
-        if (!(request instanceof IAEItemStack)) return;
-        if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
-
-        tii$ensureInitialized();
-        IAEItemStack itemStack = (IAEItemStack) request;
-        ItemStack itemRep = itemStack.asItemStackRepresentation();
-
-        for (Map.Entry<String, ResourceFakeMonitor> entry : tii$resourceMonitors.entrySet()) {
-            String providerName = entry.getKey();
-            ResourceFakeMonitor monitor = entry.getValue();
-            
-            IResourceProvider provider = TerminalInteractionRegistry.getProvider(providerName);
-            if (provider == null) continue;
-            
-            IPacketType packetType = provider.getPacketType();
-            if (packetType != null && packetType.isPacket(itemRep)) {
-                IAEItemStack result = monitor.extractItems(itemStack, mode, src);
-                this.surface(null, mode);
-                cir.setReturnValue((T) result);
-                return;
-            }
+    @SuppressWarnings("unchecked")
+    @Inject(method = "extractItems", at = @At(value = "FIELD",
+            target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;",
+            opcode = Opcodes.GETFIELD, ordinal = 0), cancellable = true)
+    private void tii$extract(T input, Actionable mode, IActionSource source, CallbackInfoReturnable<T> ci) {
+        if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)
+                || source instanceof VirtualInventory.VirtualSource) return;
+        IResourceProvider provider = TerminalInteractionRegistry.getProviderForPacket(input.asItemStackRepresentation());
+        if (provider == null) return;
+        try {
+            IStorageGrid grid = security.getGrid().getCache(IStorageGrid.class);
+            IAEItemStack result = VirtualInventory.extractItem(grid, provider, (IAEItemStack) input, mode, source);
+            ci.setReturnValue((T) result);
+        } finally {
+            surface((NetworkInventoryHandler<T>) (Object) this, mode);
         }
     }
 }

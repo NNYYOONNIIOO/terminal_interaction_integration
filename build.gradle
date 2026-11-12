@@ -1,111 +1,93 @@
 buildscript {
     repositories {
-        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://maven.minecraftforge.net' }
         mavenCentral()
-        maven { url = 'https://cursemaven.com' }
     }
     dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:3.+'
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+'
     }
 }
-        
+
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
-version = '1.2.4'
+version = '1.2.4-1.16.5'
 group = 'nyonio.terminal_interaction_integration'
 archivesBaseName = 'terminal_interaction_integration'
 
-sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
-
-sourceSets {
-    api
-}
-
-sourceSets.main.compileClasspath += sourceSets.api.output
-sourceSets.main.runtimeClasspath += sourceSets.api.output
+sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 
 minecraft {
-    mappings channel: 'snapshot', version: '20171003-1.12'
-    
+    // Match the supplied AE2 8.4.x source tree.
+    mappings channel: 'snapshot', version: '20210309-1.16.5'
     runs {
         client {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            property 'fml.coreMods.load', 'nyonio.terminal_interaction_integration.coremod.CoreMod'
+            workingDirectory project.file(project.hasProperty('tiiSmoke') ? 'run-smoke' : 'run')
+            property 'forge.logging.console.level', 'info'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            args '--mixin.config', 'mixins.terminal_interaction_integration.json'
+            mods {
+                terminal_interaction_integration { source sourceSets.main }
+                if (project.hasProperty('tiiSmoke')) {
+                    tii_smoketest { source sourceSets.test }
+                }
+            }
         }
-
         server {
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            property 'fml.coreMods.load', 'nyonio.terminal_interaction_integration.coremod.CoreMod'
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            args '--mixin.config', 'mixins.terminal_interaction_integration.json'
+            args '--nogui'
+            mods { terminal_interaction_integration { source sourceSets.main } }
         }
     }
+}
+
+// A test-only addon exercises Forge registration and real Mixin transformation.
+if (project.hasProperty('tiiSmoke')) {
+    tasks.matching { it.name == 'runClient' }.configureEach { dependsOn tasks.named('testClasses') }
 }
 
 repositories {
-    maven { url = 'https://cursemaven.com' }
-    maven { url = 'https://maven.cleanroommc.com' }
+    mavenCentral()
+    maven {
+        url = 'https://modmaven.dev/'
+        content { includeGroup 'appeng' }
+    }
 }
 
 dependencies {
-    minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2859'
-    
-    implementation fg.deobf("curse.maven:ae2-extended-life-570458:6302098")
-    
-    // 可选联动：仅用于编译，不作为运行时强依赖
-    compileOnly fg.deobf("curse.maven:ae2-fluid-crafting-rework-623955:5751930")
-    compileOnly fg.deobf("curse.maven:mekanism-energistics-1027681:5775101")
-    
-    annotationProcessor 'org.ow2.asm:asm-debug-all:5.2'
-    annotationProcessor 'com.google.guava:guava:32.1.2-jre'
-    annotationProcessor 'com.google.code.gson:gson:2.8.9'
-    
-    implementation ('zone.rong:mixinbooter:10.7') {
-        transitive = false
-    }
-    annotationProcessor ('zone.rong:mixinbooter:10.7') {
-        transitive = false
-    }
+    minecraft 'net.minecraftforge:forge:1.16.5-36.2.34'
+    implementation fg.deobf('appeng:appliedenergistics2:8.4.7')
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-inline:3.12.4'
 }
 
-tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+processResources {
+    filesMatching('META-INF/mods.toml') { expand version: project.version }
 }
 
 jar {
     manifest {
         attributes([
-            "Specification-Title": "terminal_interaction_integration",
-            "Specification-Vendor": "nyonio",
-            "Specification-Version": "1",
-            "Implementation-Title": project.name,
-            "Implementation-Version": "${version}",
-            "Implementation-Vendor" :"nyonio",
-            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-            "FMLCorePlugin": "nyonio.terminal_interaction_integration.coremod.CoreMod",
-            "FMLCorePluginContainsFMLMod": "true",
-            "ForceLoadAsMod": "true",
-            "TweakClass": "org.spongepowered.asm.launch.MixinTweaker",
-            "TweakOrder": "0",
-            "MixinConfigs": "mixins.terminal_interaction_integration.json"
+            'Specification-Title': 'terminal_interaction_integration',
+            'Specification-Vendor': 'nyonio',
+            'Specification-Version': '1',
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': 'nyonio',
+            'MixinConfigs': 'mixins.terminal_interaction_integration.json'
         ])
     }
+    finalizedBy 'reobfJar'
 }
 
-jar.finalizedBy('reobfJar') 
-
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifact jar
-        }
-    }
-    repositories {
-        maven {
-            url "file:///${project.projectDir}/mcmodsrepo"
-        }
-    }
+    publications { mavenJava(MavenPublication) { artifact jar } }
 }

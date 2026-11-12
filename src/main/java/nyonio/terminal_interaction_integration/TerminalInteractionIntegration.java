@@ -1,66 +1,50 @@
 package nyonio.terminal_interaction_integration;
 
-import net.minecraftforge.common.MinecraftForge;
+import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.ModLoader;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.Mod.EventHandler;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
-import net.minecraftforge.fml.common.network.NetworkRegistry;
-import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
-import net.minecraftforge.fml.relauncher.Side;
-import org.apache.logging.log4j.Logger;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.network.NetworkDirection;
+import net.minecraftforge.fml.network.NetworkRegistry;
+import net.minecraftforge.fml.network.simple.SimpleChannel;
 import nyonio.terminal_interaction_integration.api.ResourceRegistrationEvent;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
-import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableAction;
-import nyonio.terminal_interaction_integration.network.CPacketResourceAction;
-import nyonio.terminal_interaction_integration.network.SPacketResourceUpdate;
+import nyonio.terminal_interaction_integration.network.TerminalInteractionPacket;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-@Mod(modid = TerminalInteractionIntegration.MODID, name = TerminalInteractionIntegration.NAME, version = TerminalInteractionIntegration.VERSION, dependencies = "required-after:appliedenergistics2")
-public class TerminalInteractionIntegration
-{
+import java.util.Optional;
+
+@Mod(TerminalInteractionIntegration.MODID)
+public final class TerminalInteractionIntegration {
     public static final String MODID = "terminal_interaction_integration";
-    public static final String NAME = "Terminal Interaction Integration";
-    public static final String VERSION = "1.0";
-    public static final String CHANNEL = "tii";
+    public static final Logger LOGGER = LogManager.getLogger(MODID);
+    private static final String PROTOCOL = "1";
+    public static final SimpleChannel NETWORK = NetworkRegistry.newSimpleChannel(
+            new ResourceLocation(MODID, "main"), () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
 
-    @Mod.Instance(MODID)
-    public static TerminalInteractionIntegration instance;
-
-    private static Logger logger;
-    private static SimpleNetworkWrapper network;
-
-    @EventHandler
-    public void preInit(FMLPreInitializationEvent event)
-    {
-        logger = event.getModLog();
-        TIIConfig.load(event.getSuggestedConfigurationFile());
-
-        network = NetworkRegistry.INSTANCE.newSimpleChannel(CHANNEL);
-        network.registerMessage(CPacketResourceAction.Handler.class, CPacketResourceAction.class, 0, Side.SERVER);
-        network.registerMessage(SPacketResourceUpdate.Handler.class, SPacketResourceUpdate.class, 1, Side.CLIENT);
-        network.registerMessage(CPacketMEMonitorableAction.Handler.class, CPacketMEMonitorableAction.class, 2, Side.SERVER);
+    public TerminalInteractionIntegration() {
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, TIIConfig.SPEC);
+        NETWORK.registerMessage(0, TerminalInteractionPacket.class,
+                TerminalInteractionPacket::encode, TerminalInteractionPacket::decode,
+                TerminalInteractionPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
     }
 
-    @EventHandler
-    public void init(FMLInitializationEvent event)
-    {
-        ResourceRegistrationEvent registrationEvent = new ResourceRegistrationEvent();
-        MinecraftForge.EVENT_BUS.post(registrationEvent);
-        
-        if (event.getSide().isClient()) {
-            initClient();
-        }
+    private void setup(FMLCommonSetupEvent event) {
+        event.enqueueWork(() -> {
+            ModLoader.get().postEvent(new ResourceRegistrationEvent());
+            TerminalInteractionRegistry.setInitialized(true);
+        }).whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                LOGGER.error("Failed to register terminal resource providers", failure);
+            }
+        });
     }
-    
-    private void initClient() {
-        nyonio.terminal_interaction_integration.client.ClientInit.init();
-    }
-    
-    public static Logger getLogger() {
-        return logger;
-    }
-    
-    public static SimpleNetworkWrapper getNetwork() {
-        return network;
-    }
+
+    public static Logger getLogger() { return LOGGER; }
+    public static SimpleChannel getNetwork() { return NETWORK; }
 }

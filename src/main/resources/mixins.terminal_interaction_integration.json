@@ -1,20 +1,19 @@
 {
-  "required": false,
+  "required": true,
+  "minVersion": "0.8",
   "compatibilityLevel": "JAVA_8",
   "package": "nyonio.terminal_interaction_integration.mixin",
-  "refmap": "mixins.terminal_interaction_integration.refmap.json",
-  "target": "@env(DEFAULT)",
-  "minVersion": "0.8",
   "mixins": [
-    "ae2.MixinGridStorageCache",
-    "ae2.MixinNetworkMonitor",
     "ae2.MixinNetworkInventoryHandler",
-    "ae2.MixinContainerMEMonitorable"
+    "ae2.MixinNetworkMonitor",
+    "ae2.TerminalContainerAccess",
+    "ae2.BaseContainerAccess",
+    "ae2.MixinUpgradeInventory",
+    "ae2.MixinUpgradeInvFilter"
   ],
   "client": [
-    "ae2.MixinGuiMEMonitorable"
+    "ae2.MixinItemTerminalScreen",
+    "ae2.MixinTerminalTooltip"
   ],
-  "injectors": {
-    "defaultRequire": 0
-  }
+  "injectors": { "defaultRequire": 1 }
 }
