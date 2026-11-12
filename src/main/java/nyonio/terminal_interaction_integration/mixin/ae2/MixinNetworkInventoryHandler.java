@@ -49,14 +49,12 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
             target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;",
             opcode = Opcodes.GETFIELD, ordinal = 0), cancellable = true)
     private void tii$extract(T input, Actionable mode, IActionSource source, CallbackInfoReturnable<T> ci) {
-        if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)
-                || source instanceof VirtualInventory.VirtualSource) return;
+        if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)) return;
         IResourceProvider provider = TerminalInteractionRegistry.getProviderForPacket(input.asItemStackRepresentation());
         if (provider == null) return;
         try {
-            IStorageGrid grid = security.getGrid().getCache(IStorageGrid.class);
-            IAEItemStack result = VirtualInventory.extractItem(grid, provider, (IAEItemStack) input, mode, source);
-            ci.setReturnValue((T) result);
+            // Virtual packet stacks are display-only; extraction happens through terminal interaction packets.
+            ci.setReturnValue(null);
         } finally {
             surface((NetworkInventoryHandler<T>) (Object) this, mode);
         }

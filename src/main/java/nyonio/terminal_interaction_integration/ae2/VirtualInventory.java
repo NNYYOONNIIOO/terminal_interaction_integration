@@ -53,12 +53,6 @@ public final class VirtualInventory {
         return inserted >= size ? null : provider.getPacketType().createAEStack(size - inserted);
     }
 
-    public static IAEItemStack extractItem(IStorageGrid grid, IResourceProvider provider,
-                                           IAEItemStack stack, Actionable mode, IActionSource source) {
-        long extracted = extract(grid, provider, stack.getStackSize(), mode, source);
-        return extracted <= 0 ? null : provider.getPacketType().createAEStack(extracted);
-    }
-
     /** Marker prevents the bridge from recursively intercepting its own resource operations. */
     public static final class VirtualSource implements IActionSource {
         private final IActionSource source;

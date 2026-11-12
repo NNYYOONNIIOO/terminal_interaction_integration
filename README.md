@@ -37,6 +37,8 @@ private static void registerTerminalResources(ResourceRegistrationEvent event) {
 
 在 ME 物品终端中，手持已注册容器时，左键将容器物品存入网络，右键与虚拟资源交互。右键普通条目时，有内容的已注册容器也可以将资源存入网络。普通流体终端仍使用 AE2 自身的流体交互。
 
+虚拟资源条目只用于显示和容器交互，不能通过普通提取、Shift 提取、滚轮提取或创造模式中键复制获得实体物品；物品通道也不会将虚拟条目导出为实体物品。资源交换通过对应的真实资源通道完成。
+
 可以通过 `UpgradeModuleRegistration.register(item, maxInstalled)` 注册可放入接口设备的自定义升级模块，并通过 `IUpgradeModuleHost` 查询安装数量。
 
 ## 配置和构建

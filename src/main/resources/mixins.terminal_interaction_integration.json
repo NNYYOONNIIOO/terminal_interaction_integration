@@ -6,6 +6,7 @@
   "mixins": [
     "ae2.MixinNetworkInventoryHandler",
     "ae2.MixinNetworkMonitor",
+    "ae2.MixinItemTerminalContainer",
     "ae2.TerminalContainerAccess",
     "ae2.BaseContainerAccess",
     "ae2.MixinUpgradeInventory",
