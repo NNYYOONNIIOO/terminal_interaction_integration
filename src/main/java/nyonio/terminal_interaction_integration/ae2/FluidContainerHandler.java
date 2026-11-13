@@ -10,6 +10,8 @@ import nyonio.terminal_interaction_integration.api.IContainerHandler;
 
 /** Uses the Forge item capability, including replacement items returned by buckets. */
 public final class FluidContainerHandler implements IContainerHandler {
+    // Bound work for capabilities that accept only tiny amounts per call.
+    private static final int MAX_TRANSFER_STEPS = 4096;
     private final FluidStack fluid;
     private ItemStack lastInput;
     private ItemStack lastResult;
@@ -55,34 +57,56 @@ public final class FluidContainerHandler implements IContainerHandler {
     public long getStoredAmount(ItemStack container) {
         IFluidHandlerItem handler = probe(container);
         if (handler == null) return 0;
-        FluidStack drained = handler.drain(amount(Integer.MAX_VALUE), FluidAction.SIMULATE);
-        return fluid.isFluidEqual(drained) ? drained.getAmount() : 0;
+        long stored = 0;
+        for (int tank = 0; tank < handler.getTanks(); tank++) {
+            FluidStack contents = handler.getFluidInTank(tank);
+            if (fluid.isFluidEqual(contents)) stored += Math.max(0, contents.getAmount());
+        }
+        return stored;
     }
 
     @Override
     public long getMaxCapacity(ItemStack container) {
         IFluidHandlerItem handler = probe(container);
-        return handler == null ? 0 : getStoredAmount(container)
-                + Math.max(0, handler.fill(amount(Integer.MAX_VALUE), FluidAction.SIMULATE));
+        if (handler == null) return 0;
+        long capacity = 0;
+        for (int tank = 0; tank < handler.getTanks(); tank++) {
+            FluidStack contents = handler.getFluidInTank(tank);
+            if (!contents.isEmpty() && !fluid.isFluidEqual(contents)) continue;
+            int stored = contents.isEmpty() ? 0 : Math.max(0, contents.getAmount());
+            capacity += handler.isFluidValid(tank, fluid)
+                    ? Math.max(stored, handler.getTankCapacity(tank)) : stored;
+        }
+        return capacity;
     }
 
     @Override
     public long extract(ItemStack container, long amount, IActionSource source) {
-        IFluidHandlerItem handler = mutableHandler(container);
-        if (handler == null || amount <= 0) return 0;
-        FluidStack possible = handler.drain(amount(amount), FluidAction.SIMULATE);
-        if (possible.isEmpty() || !fluid.isFluidEqual(possible)) return 0;
-        FluidStack drained = handler.drain(possible, FluidAction.EXECUTE);
-        rememberResult(container, handler);
-        return fluid.isFluidEqual(drained) ? drained.getAmount() : 0;
+        long removed = 0;
+        for (int step = 0; removed < amount && step < MAX_TRANSFER_STEPS; step++) {
+            IFluidHandlerItem handler = mutableHandler(container);
+            if (handler == null) break;
+            FluidStack possible = handler.drain(amount(amount - removed), FluidAction.SIMULATE);
+            if (possible.isEmpty() || !fluid.isFluidEqual(possible)) break;
+            FluidStack drained = handler.drain(possible, FluidAction.EXECUTE);
+            rememberResult(container, handler);
+            if (!fluid.isFluidEqual(drained) || drained.getAmount() <= 0) break;
+            removed += Math.min(amount - removed, drained.getAmount());
+        }
+        return removed;
     }
 
     @Override
     public long inject(ItemStack container, long amount, IActionSource source) {
-        IFluidHandlerItem handler = mutableHandler(container);
-        if (handler == null || amount <= 0) return 0;
-        int filled = handler.fill(amount(amount), FluidAction.EXECUTE);
-        rememberResult(container, handler);
+        long filled = 0;
+        for (int step = 0; filled < amount && step < MAX_TRANSFER_STEPS; step++) {
+            IFluidHandlerItem handler = mutableHandler(container);
+            if (handler == null) break;
+            int accepted = handler.fill(amount(amount - filled), FluidAction.EXECUTE);
+            rememberResult(container, handler);
+            if (accepted <= 0) break;
+            filled += Math.min(amount - filled, accepted);
+        }
         return filled;
     }
 

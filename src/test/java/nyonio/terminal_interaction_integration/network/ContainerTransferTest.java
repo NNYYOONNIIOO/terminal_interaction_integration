@@ -7,11 +7,20 @@ import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.data.IAEStack;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidUtil;
+import net.minecraftforge.fluids.capability.IFluidHandler.FluidAction;
+import net.minecraftforge.fluids.capability.IFluidHandlerItem;
+import nyonio.terminal_interaction_integration.ae2.FluidContainerHandler;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IPacketType;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
@@ -52,6 +61,129 @@ public class ContainerTransferTest {
         assertEquals(60, moved);
         assertEquals(150, f.amount.get());
         verify(handler).extract(container, 60, f.source);
+    }
+
+    @Test
+    public void fluidTankFillsToCapacityDespiteA64000PerCallLimit() {
+        Fixture f = new Fixture(1000000);
+        try (RateLimitedContainer tank = new RateLimitedContainer(256000, 64000, 0)) {
+            assertEquals(256000, tank.handler.getMaxCapacity(tank.item));
+            long moved = TerminalInteractionPacket.fill(f.grid, f.provider, tank.handler,
+                    tank.item, f.source, Long.MAX_VALUE);
+
+            assertEquals(256000, moved);
+            assertEquals(256000, tank.stored());
+            assertEquals(744000, f.amount.get());
+            assertEquals(1000000, tank.stored() + f.amount.get());
+        }
+    }
+
+    @Test
+    public void fluidTankOnlyTakesWhatTheNetworkHas() {
+        Fixture f = new Fixture(100000);
+        try (RateLimitedContainer tank = new RateLimitedContainer(256000, 64000, 0)) {
+            long moved = TerminalInteractionPacket.fill(f.grid, f.provider, tank.handler,
+                    tank.item, f.source, Long.MAX_VALUE);
+
+            assertEquals(100000, moved);
+            assertEquals(100000, tank.stored());
+            assertEquals(0, f.amount.get());
+        }
+    }
+
+    @Test
+    public void fluidTankDrainsAllItsContentsDespiteAPerCallLimit() {
+        Fixture f = new Fixture(0);
+        try (RateLimitedContainer tank = new RateLimitedContainer(256000, 64000, 256000)) {
+            assertEquals(256000, tank.handler.getStoredAmount(tank.item));
+            long moved = TerminalInteractionPacket.drain(f.grid, f.provider, tank.handler, tank.item, f.source);
+
+            assertEquals(256000, moved);
+            assertEquals(0, tank.stored());
+            assertEquals(256000, f.amount.get());
+        }
+    }
+
+    @Test
+    public void refusingFluidContainerDoesNotConsumeNetworkResources() {
+        Fixture f = new Fixture(1000000);
+        try (RateLimitedContainer tank = new RateLimitedContainer(256000, 0, 0)) {
+            assertEquals(0, TerminalInteractionPacket.fill(f.grid, f.provider, tank.handler,
+                    tank.item, f.source, Long.MAX_VALUE));
+            assertEquals(0, tank.stored());
+            assertEquals(1000000, f.amount.get());
+            verify(f.monitor, never()).extractItems(any(), eq(Actionable.MODULATE), any());
+        }
+    }
+
+    /** Forge capability double with separate contents for every ItemStack copy. */
+    private static final class RateLimitedContainer implements AutoCloseable {
+        final ItemStack item = mock(ItemStack.class);
+        final Map<ItemStack, AtomicLong> contents = new IdentityHashMap<>();
+        final Map<ItemStack, IFluidHandlerItem> capabilities = new IdentityHashMap<>();
+        final MockedStatic<FluidUtil> util;
+        final FluidContainerHandler handler;
+        final int capacity;
+        final int rate;
+
+        RateLimitedContainer(int capacity, int rate, int initialAmount) {
+            this.capacity = capacity;
+            this.rate = rate;
+            util = mockStatic(FluidUtil.class);
+            util.when(() -> FluidUtil.getFluidHandler(any(ItemStack.class))).thenAnswer(invocation -> {
+                IFluidHandlerItem capability = capabilities.get(invocation.getArgument(0));
+                return capability == null ? LazyOptional.empty() : LazyOptional.of(() -> capability);
+            });
+            initialize(item, initialAmount);
+            handler = new FluidContainerHandler(fluid(1));
+        }
+
+        private void initialize(ItemStack stack, long amount) {
+            AtomicLong stored = new AtomicLong(amount);
+            contents.put(stack, stored);
+            IFluidHandlerItem capability = mock(IFluidHandlerItem.class);
+            capabilities.put(stack, capability);
+            when(stack.copy()).thenAnswer(invocation -> {
+                ItemStack copy = mock(ItemStack.class);
+                initialize(copy, stored.get());
+                return copy;
+            });
+            when(capability.getContainer()).thenReturn(stack);
+            when(capability.getTanks()).thenReturn(1);
+            when(capability.getTankCapacity(0)).thenReturn(capacity);
+            when(capability.getFluidInTank(0)).thenAnswer(invocation -> fluid((int) stored.get()));
+            when(capability.isFluidValid(eq(0), any(FluidStack.class))).thenReturn(true);
+            when(capability.fill(any(FluidStack.class), any(FluidAction.class))).thenAnswer(invocation -> {
+                FluidStack request = invocation.getArgument(0);
+                FluidAction action = invocation.getArgument(1);
+                int accepted = (int) Math.min(rate, Math.min(request.getAmount(), capacity - stored.get()));
+                if (action.execute()) stored.addAndGet(accepted);
+                return accepted;
+            });
+            when(capability.drain(any(FluidStack.class), any(FluidAction.class))).thenAnswer(invocation -> {
+                FluidStack request = invocation.getArgument(0);
+                FluidAction action = invocation.getArgument(1);
+                int removed = (int) Math.min(rate, Math.min(request.getAmount(), stored.get()));
+                if (action.execute()) stored.addAndGet(-removed);
+                return fluid(removed);
+            });
+        }
+
+        private FluidStack fluid(int amount) {
+            FluidStack fluid = mock(FluidStack.class);
+            AtomicLong size = new AtomicLong(amount);
+            when(fluid.getAmount()).thenAnswer(invocation -> (int) size.get());
+            when(fluid.isEmpty()).thenAnswer(invocation -> size.get() <= 0);
+            when(fluid.copy()).thenAnswer(invocation -> fluid((int) size.get()));
+            doAnswer(invocation -> { size.set((int) invocation.getArgument(0)); return null; })
+                    .when(fluid).setAmount(anyInt());
+            when(fluid.isFluidEqual(any(FluidStack.class)))
+                    .thenAnswer(invocation -> !((FluidStack) invocation.getArgument(0)).isEmpty());
+            return fluid;
+        }
+
+        long stored() { return contents.get(item).get(); }
+        @Override public void close() { util.close(); }
     }
 
     private static final class Fixture {
