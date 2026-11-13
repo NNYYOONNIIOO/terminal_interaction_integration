@@ -1,5 +1,8 @@
 package nyonio.terminal_interaction_integration.mixin.ae2;
 
+import appeng.fluids.helper.IFluidInterfaceHost;
+import appeng.helpers.DualityInterface;
+import appeng.helpers.IInterfaceHost;
 import appeng.parts.automation.UpgradeInventory;
 import appeng.util.inv.IAEAppEngInventory;
 import net.minecraft.item.Item;
@@ -31,8 +34,8 @@ public abstract class MixinUpgradeInventory implements IUpgradeModuleHost {
 
     @Override @Unique
     public boolean terminalInteractionIntegration$isInterfaceDevice() {
-        if (parent == null) return false;
-        String name = parent.getClass().getName();
-        return name.contains("Interface") || name.contains("Duality") || name.contains("GasInterface");
+        return parent instanceof DualityInterface
+                || parent instanceof IInterfaceHost
+                || parent instanceof IFluidInterfaceHost;
     }
 }

@@ -39,7 +39,11 @@ private static void registerTerminalResources(ResourceRegistrationEvent event) {
 
 虚拟资源条目只用于显示和容器交互，不能通过普通提取、Shift 提取、滚轮提取或创造模式中键复制获得实体物品；物品通道也不会将虚拟条目导出为实体物品。资源交换通过对应的真实资源通道完成。
 
-可以通过 `UpgradeModuleRegistration.register(item, maxInstalled)` 注册可放入接口设备的自定义升级模块，并通过 `IUpgradeModuleHost` 查询安装数量。
+可以通过 `UpgradeModuleRegistration.register(item, maxInstalled)` 注册可放入接口设备的自定义升级模块，并通过 `IUpgradeModuleHost` 查询安装数量。升级槽使用 AE2 8.4.x 的接口类型识别设备，不依赖旧版气体接口的类名。
+
+本分支不包含 1.12 专用的 CraftTweaker JAR 或 1.12.2 启动脚本；附属模组应通过上述 Java API 注册资源。
+
+终端交互提示支持简体中文、英语和俄语，跟随游戏语言切换。具体资源和容器的名称由附属模组提供。
 
 ## 配置和构建
 
