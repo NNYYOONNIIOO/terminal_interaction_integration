@@ -2,6 +2,5 @@
   "terminal_interaction_integration.name": "Интеграция взаимодействия с терминалом",
   "terminal_interaction_integration.action.deposit": "Поместить",
   "terminal_interaction_integration.action.fill": "Заполнить",
-  "terminal_interaction_integration.action.extract": "Извлечь",
-  "terminal_interaction_integration.fluid.amount": "В сети: %s mB"
+  "terminal_interaction_integration.action.extract": "Извлечь"
 }

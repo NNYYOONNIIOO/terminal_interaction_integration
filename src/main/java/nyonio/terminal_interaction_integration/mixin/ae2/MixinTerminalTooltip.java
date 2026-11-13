@@ -24,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 @Mixin(value = AEBaseScreen.class, remap = false)
 public abstract class MixinTerminalTooltip<C extends Container> extends ContainerScreen<C> {
@@ -43,21 +42,13 @@ public abstract class MixinTerminalTooltip<C extends Container> extends Containe
         if (builtinFluid && !TIIConfig.isFluidTerminalIntegrationEnabled()) return;
         IContainerHandler handler = selected == null ? TerminalInteractionRegistry.getContainerHandler(held)
                 : selected.getContainerHandler();
-        List<ITextComponent> lines = new ArrayList<>();
-        if (builtinFluid) {
-            lines.add(new StringTextComponent(selected.getPacketType().getDisplayName()));
-            lines.add(new TranslationTextComponent("terminal_interaction_integration.fluid.amount",
-                    String.format(Locale.ROOT, "%,d", ((RepoSlot<?>) slot).getStoredAmount())));
-        }
-        if (handler == null || held.isEmpty() || !handler.canHandle(held)) {
-            if (!lines.isEmpty()) renderWrappedToolTip(matrices, lines, mouseX, mouseY, font);
-            return;
-        }
+        if (handler == null || held.isEmpty() || !handler.canHandle(held)) return;
         if (selected == null && handler.getStoredAmount(held) <= 0) return;
         IResourceProvider provider = selected == null
                 ? TerminalInteractionRegistry.getProviderForContainer(held) : selected;
         if (provider == null) return;
 
+        List<ITextComponent> lines = new ArrayList<>();
         lines.add(new StringTextComponent(new TranslationTextComponent("key.mouse.left").getString() + " : "
                 + new TranslationTextComponent("terminal_interaction_integration.action.deposit").getString()
                 + " " + held.getDisplayName().getString()));
