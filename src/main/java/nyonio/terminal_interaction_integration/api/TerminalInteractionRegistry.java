@@ -4,6 +4,7 @@ import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEStack;
 import net.minecraft.item.ItemStack;
+import nyonio.terminal_interaction_integration.ae2.FluidTerminalIntegration;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ public final class TerminalInteractionRegistry {
         for (IResourceProvider provider : getAllProviders()) {
             if (provider.getPacketType().isPacket(stack)) return provider;
         }
-        return null;
+        return FluidTerminalIntegration.forPacket(stack);
     }
 
     @Nullable
@@ -82,7 +83,7 @@ public final class TerminalInteractionRegistry {
             IContainerHandler handler = provider.getContainerHandler();
             if (handler != null && handler.canHandle(stack)) return provider;
         }
-        return null;
+        return FluidTerminalIntegration.forContainer(stack);
     }
 
     @Nullable
@@ -105,7 +106,9 @@ public final class TerminalInteractionRegistry {
         return provider == null ? null : provider.getContainerHandler();
     }
 
-    public static boolean isPacket(ItemStack stack) { return getPacketType(stack) != null; }
+    public static boolean isPacket(ItemStack stack) {
+        return FluidTerminalIntegration.isFluidPacket(stack) || getPacketType(stack) != null;
+    }
     public static boolean hasContainerHandler(ItemStack stack) { return getContainerHandler(stack) != null; }
 
     public static List<IPacketType> getPacketTypes() {

@@ -22,4 +22,13 @@ public interface IContainerHandler {
     String getContainerDisplayName(ItemStack container);
     
     ItemStack getEmptyContainer();
+
+    /**
+     * Result of the last mutation on this one-item stack. Override when an
+     * operation changes the item itself (for example, filling an empty bucket).
+     * The default preserves existing addon handlers.
+     */
+    default ItemStack getResultContainer(ItemStack container) {
+        return container;
+    }
 }

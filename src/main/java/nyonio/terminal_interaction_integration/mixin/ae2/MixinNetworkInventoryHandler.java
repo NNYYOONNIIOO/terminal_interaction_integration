@@ -9,6 +9,7 @@ import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
 import appeng.me.cache.SecurityCache;
 import appeng.me.storage.NetworkInventoryHandler;
+import nyonio.terminal_interaction_integration.ae2.FluidTerminalIntegration;
 import nyonio.terminal_interaction_integration.ae2.VirtualInventory;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
@@ -33,6 +34,15 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
     private void tii$insert(T input, Actionable mode, IActionSource source, CallbackInfoReturnable<T> ci) {
         if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)
                 || source instanceof VirtualInventory.VirtualSource) return;
+        // Built-in fluid markers are display-only; never convert fabricated item stacks to fluid.
+        if (FluidTerminalIntegration.isFluidPacket(input.asItemStackRepresentation())) {
+            try {
+                ci.setReturnValue(input);
+            } finally {
+                surface((NetworkInventoryHandler<T>) (Object) this, mode);
+            }
+            return;
+        }
         IResourceProvider provider = TerminalInteractionRegistry.getProviderForPacket(input.asItemStackRepresentation());
         if (provider == null) return;
         try {
@@ -50,8 +60,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
             opcode = Opcodes.GETFIELD, ordinal = 0), cancellable = true)
     private void tii$extract(T input, Actionable mode, IActionSource source, CallbackInfoReturnable<T> ci) {
         if (!(myChannel instanceof IItemStorageChannel) || !(input instanceof IAEItemStack)) return;
-        IResourceProvider provider = TerminalInteractionRegistry.getProviderForPacket(input.asItemStackRepresentation());
-        if (provider == null) return;
+        if (!TerminalInteractionRegistry.isPacket(input.asItemStackRepresentation())) return;
         try {
             // Virtual packet stacks are display-only; extraction happens through terminal interaction packets.
             ci.setReturnValue(null);

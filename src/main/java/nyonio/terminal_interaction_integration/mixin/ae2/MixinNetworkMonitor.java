@@ -11,6 +11,8 @@ import appeng.me.cache.GridStorageCache;
 import appeng.me.cache.NetworkMonitor;
 import nyonio.terminal_interaction_integration.TIIConfig;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
+import nyonio.terminal_interaction_integration.ae2.FluidResourceView;
+import nyonio.terminal_interaction_integration.ae2.FluidTerminalIntegration;
 import nyonio.terminal_interaction_integration.ae2.VirtualResourceView;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
@@ -25,6 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Mixin(value = NetworkMonitor.class, remap = false)
@@ -36,11 +39,16 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> {
     @Unique private final Map<String, VirtualResourceView> tii$views = new LinkedHashMap<>();
     @Unique private final Map<String, IActionSource> tii$pending = new LinkedHashMap<>();
     @Unique private int tii$ticks;
+    @Unique private FluidResourceView tii$fluids;
+    @Unique private boolean tii$queried;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Unique
     private void tii$ensureViews() {
         if (!(myChannel instanceof IItemStorageChannel)) return;
+        if (tii$fluids == null && TIIConfig.isFluidTerminalIntegrationEnabled()) {
+            tii$fluids = new FluidResourceView(myGridCache.getInventory(FluidTerminalIntegration.channel()));
+        }
         for (IResourceProvider provider : TerminalInteractionRegistry.getAllProviders()) {
             if (tii$views.containsKey(provider.getName())) continue;
             IMEMonitor monitor = myGridCache.getInventory((IStorageChannel) provider.getStorageChannel());
@@ -56,8 +64,10 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> {
     @Inject(method = "getAvailableItems", at = @At("RETURN"))
     private void tii$addVirtualItems(IItemList<T> out, CallbackInfoReturnable<IItemList<T>> ci) {
         if (!(myChannel instanceof IItemStorageChannel)) return;
+        tii$queried = true;
         tii$ensureViews();
         IItemList<IAEItemStack> items = (IItemList) ci.getReturnValue();
+        if (tii$fluids != null) tii$fluids.addTo(items);
         for (VirtualResourceView view : tii$views.values()) {
             try {
                 view.addTo(items);
@@ -71,7 +81,12 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> {
     @SuppressWarnings("unchecked")
     @Inject(method = "onTick", at = @At("HEAD"))
     private void tii$notifyChanges(CallbackInfo ci) {
-        if (tii$pending.isEmpty()) {
+        if (!(myChannel instanceof IItemStorageChannel)) return;
+        if (tii$queried && tii$fluids == null && TIIConfig.isFluidTerminalIntegrationEnabled()) {
+            tii$ensureViews();
+        }
+        boolean fluidsChanged = tii$fluids != null && tii$fluids.hasChanges();
+        if (tii$pending.isEmpty() && !fluidsChanged) {
             tii$ticks = 0;
             return;
         }
@@ -88,6 +103,11 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> {
             ArrayList<T> changes = new ArrayList<>(1);
             changes.add((T) marker);
             postChange(true, changes, entry.getValue());
+        }
+        if (fluidsChanged) {
+            IActionSource fluidSource = tii$fluids.takeSource();
+            List<IAEItemStack> markers = tii$fluids.takeChanges();
+            if (!markers.isEmpty()) postChange(true, (Iterable<T>) (Iterable<?>) markers, fluidSource);
         }
     }
 }

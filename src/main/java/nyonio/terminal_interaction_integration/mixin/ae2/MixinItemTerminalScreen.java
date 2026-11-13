@@ -9,6 +9,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.ItemStack;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
+import nyonio.terminal_interaction_integration.TIIConfig;
+import nyonio.terminal_interaction_integration.ae2.FluidTerminalIntegration;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
@@ -29,6 +31,10 @@ public abstract class MixinItemTerminalScreen {
         if (minecraft.player == null) return;
         IResourceProvider provider = entry == null || entry.getStack() == null ? null
                 : TerminalInteractionRegistry.getProviderForPacket(entry.getStack().asItemStackRepresentation());
+        if (FluidTerminalIntegration.isBuiltin(provider) && !TIIConfig.isFluidTerminalIntegrationEnabled()) {
+            ci.cancel();
+            return;
+        }
         ItemStack held = minecraft.player.inventory.getItemStack();
         IContainerHandler heldHandler = TerminalInteractionRegistry.getContainerHandler(held);
         if (provider == null) {
@@ -42,9 +48,12 @@ public abstract class MixinItemTerminalScreen {
                 return;
             }
         } else if (held.isEmpty()) {
+            if (FluidTerminalIntegration.isBuiltin(provider)) {
+                ci.cancel();
+                return;
+            }
             if (provider.getContainerHandler() == null) return;
         } else {
-            if (heldHandler == null) return;
             IContainerHandler handler = provider.getContainerHandler();
             if (handler == null || !handler.canHandle(held)) {
                 ci.cancel();

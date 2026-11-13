@@ -28,6 +28,7 @@ public final class TerminalInteractionIntegration {
 
     public TerminalInteractionIntegration() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, TIIConfig.SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, TIIConfig.SERVER_SPEC);
         NETWORK.registerMessage(0, TerminalInteractionPacket.class,
                 TerminalInteractionPacket::encode, TerminalInteractionPacket::decode,
                 TerminalInteractionPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));

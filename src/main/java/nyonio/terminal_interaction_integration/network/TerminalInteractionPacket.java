@@ -15,6 +15,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketBuffer;
 import net.minecraftforge.fml.network.NetworkEvent;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
+import nyonio.terminal_interaction_integration.TIIConfig;
+import nyonio.terminal_interaction_integration.ae2.FluidTerminalIntegration;
 import nyonio.terminal_interaction_integration.ae2.VirtualInventory;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
@@ -63,6 +65,7 @@ public final class TerminalInteractionPacket {
         IResourceProvider provider = selected == null ? TerminalInteractionRegistry.getProviderForContainer(cursor)
                 : TerminalInteractionRegistry.getProviderForPacket(selected.asItemStackRepresentation());
         if (provider == null || provider.getContainerHandler() == null) return;
+        if (FluidTerminalIntegration.isBuiltin(provider) && !TIIConfig.isFluidTerminalIntegrationEnabled()) return;
         if (selected == null && (cursor.isEmpty()
                 || provider.getContainerHandler().getStoredAmount(cursor) <= 0)) return;
 
@@ -83,6 +86,7 @@ public final class TerminalInteractionPacket {
             ItemStack one = empty.copy();
             one.setCount(1);
             if (!handler.canHandle(one) || fill(grid, provider, handler, one, source, 1000) <= 0) return;
+            one = handler.getResultContainer(one);
             if (shift) {
                 if (!player.inventory.addItemStackToInventory(one)) player.dropItem(one, false);
             } else {
@@ -96,6 +100,7 @@ public final class TerminalInteractionPacket {
                     ? drain(grid, provider, handler, one, source)
                     : fill(grid, provider, handler, one, source, Long.MAX_VALUE);
             if (moved <= 0) return;
+            one = handler.getResultContainer(one);
             if (cursor.getCount() == 1) {
                 player.inventory.setItemStack(one);
             } else {
