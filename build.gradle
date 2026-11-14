@@ -46,6 +46,7 @@ minecraft {
 }
 
 repositories {
+    mavenCentral()
     maven { url = 'https://cursemaven.com' }
     maven { url = 'https://maven.cleanroommc.com' }
 }
@@ -54,6 +55,8 @@ dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2859'
     
     implementation fg.deobf("curse.maven:ae2-extended-life-570458:6302098")
+    implementation fg.deobf("curse.maven:crazyae-1111042:6840104")
+    compileOnly fg.deobf("curse.maven:botania-225643:3330934")
     
     // 可选联动：仅用于编译，不作为运行时强依赖
     compileOnly fg.deobf("curse.maven:ae2-fluid-crafting-rework-623955:5751930")
@@ -62,6 +65,8 @@ dependencies {
     annotationProcessor 'org.ow2.asm:asm-debug-all:5.2'
     annotationProcessor 'com.google.guava:guava:32.1.2-jre'
     annotationProcessor 'com.google.code.gson:gson:2.8.9'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:3.12.4'
     
     implementation ('zone.rong:mixinbooter:10.7') {
         transitive = false
@@ -73,6 +78,13 @@ dependencies {
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+test {
+    workingDir = file("$buildDir/test-work")
+    doFirst {
+        workingDir.mkdirs()
+    }
 }
 
 jar {

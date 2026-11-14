@@ -12,6 +12,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IPacketType;
+import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.network.CPacketMEMonitorableAction;
 import org.spongepowered.asm.mixin.Mixin;
@@ -72,9 +73,6 @@ public abstract class MixinGuiMEMonitorable extends AEBaseMEGui {
 
     @Unique
     private boolean handleCustomContainerInteract(SlotME s, ItemStack h) {
-        IContainerHandler handler = TerminalInteractionRegistry.getContainerHandler(h);
-        if (handler == null) return false;
-        
         IAEItemStack aeStack = s.getAEStack();
         boolean isVirtualPacket = false;
         IPacketType packetType = null;
@@ -86,6 +84,9 @@ public abstract class MixinGuiMEMonitorable extends AEBaseMEGui {
         }
         
         if (isVirtualPacket && packetType != null) {
+            IResourceProvider provider = TerminalInteractionRegistry.getProvider(packetType.getName());
+            IContainerHandler handler = provider == null ? null : provider.getContainerHandler();
+            if (handler == null || !handler.canHandle(h)) return false;
             long currentAmount = handler.getStoredAmount(h);
             NBTTagCompound tag = new NBTTagCompound();
             tag.setString("type", packetType.getName());

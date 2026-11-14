@@ -13,6 +13,7 @@ import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IPacketType;
 import nyonio.terminal_interaction_integration.api.IResourceNetworkMonitor;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEIntegration;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -56,7 +57,7 @@ public abstract class MixinGridStorageCache {
     @Inject(method = "postAlterationOfStoredItems", at = @At("TAIL"))
     public void postAlterationOfStoredItems(final IStorageChannel<?> chan, final Iterable<? extends IAEStack<?>> input, final IActionSource src, final CallbackInfo ci) {
         IResourceProvider provider = TerminalInteractionRegistry.getProviderByChannel(chan);
-        if (provider == null) return;
+        if (provider == null || CrazyAEIntegration.manages(provider)) return;
         
         IPacketType packetType = provider.getPacketType();
         if (packetType == null) return;
@@ -99,7 +100,7 @@ public abstract class MixinGridStorageCache {
             final CallbackInfo ci
     ) {
         IResourceProvider provider = TerminalInteractionRegistry.getProviderByChannel(chan);
-        if (provider == null) return;
+        if (provider == null || CrazyAEIntegration.manages(provider)) return;
         
         IPacketType packetType = provider.getPacketType();
         if (packetType == null) return;

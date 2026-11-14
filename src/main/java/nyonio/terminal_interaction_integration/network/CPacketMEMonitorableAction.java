@@ -36,6 +36,8 @@ import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
+import nyonio.terminal_interaction_integration.ae2.ResourceTransfers;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEIntegration;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IPacketType;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
@@ -240,67 +242,19 @@ public class CPacketMEMonitorableAction implements IMessage {
             fluidStorage.extractItems(aeFluid, Actionable.MODULATE, source);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         private static long injectToNetworkResource(IStorageGrid grid, IResourceProvider provider,
                 long amount, IActionSource source) {
-            if (amount <= 0) return 0;
-            IPacketType packetType = provider.getPacketType();
-            if (packetType == null) return 0;
-            
-            IStorageChannel resourceChannel = provider.getStorageChannel();
-            if (resourceChannel == null) return 0;
-            
-            IMEMonitor resourceMonitor = grid.getInventory(resourceChannel);
-            if (resourceMonitor == null) return 0;
-            
-            IAEStack toInject = packetType.createResourceStack(amount);
-            if (toInject == null) return 0;
-            
-            IAEStack result = (IAEStack) resourceMonitor.injectItems(toInject, Actionable.MODULATE, source);
-            long injected = result == null ? amount : amount - result.getStackSize();
-            return injected;
+            return ResourceTransfers.insert(grid, provider, amount, Actionable.MODULATE, source);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         private static long extractFromNetworkResource(IStorageGrid grid, IResourceProvider provider,
                 long amount, IActionSource source) {
-            if (amount <= 0) return 0;
-            IPacketType packetType = provider.getPacketType();
-            if (packetType == null) return 0;
-            
-            IStorageChannel resourceChannel = provider.getStorageChannel();
-            if (resourceChannel == null) return 0;
-            
-            IMEMonitor resourceMonitor = grid.getInventory(resourceChannel);
-            if (resourceMonitor == null) return 0;
-            
-            IAEStack toExtract = packetType.createResourceStack(amount);
-            if (toExtract == null) return 0;
-            
-            IAEStack result = (IAEStack) resourceMonitor.extractItems(toExtract, Actionable.MODULATE, source);
-            if (result == null) return 0;
-            return result.getStackSize();
+            return ResourceTransfers.extract(grid, provider, amount, Actionable.MODULATE, source);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         private static long injectToNetworkResourceSimulate(IStorageGrid grid, IResourceProvider provider,
                 long amount, IActionSource source) {
-            if (amount <= 0) return 0;
-            IPacketType packetType = provider.getPacketType();
-            if (packetType == null) return 0;
-            
-            IStorageChannel resourceChannel = provider.getStorageChannel();
-            if (resourceChannel == null) return 0;
-            
-            IMEMonitor resourceMonitor = grid.getInventory(resourceChannel);
-            if (resourceMonitor == null) return 0;
-            
-            IAEStack toInject = packetType.createResourceStack(amount);
-            if (toInject == null) return 0;
-            
-            IAEStack result = (IAEStack) resourceMonitor.injectItems(toInject, Actionable.SIMULATE, source);
-            long canInject = result == null ? amount : amount - result.getStackSize();
-            return canInject;
+            return ResourceTransfers.insert(grid, provider, amount, Actionable.SIMULATE, source);
         }
 
         private static void handleCustomInteract(final CPacketMEMonitorableAction message, final EntityPlayerMP player) {
@@ -360,16 +314,23 @@ public class CPacketMEMonitorableAction implements IMessage {
 
                 long toRequest = Math.min(amount, availableSpace);
 
-                long networkAmount = extractFromNetworkResource(grid, provider, toRequest, source);
-                if (networkAmount > 0) {
-                    long injected = handler.inject(h, networkAmount, source);
-                    if (injected < networkAmount) {
-                        // Do not destroy resources when a container accepts less
-                        // than the amount removed from the network.
-                        injectToNetworkResource(grid, provider,
-                                networkAmount - injected, source);
+                if (CrazyAEIntegration.manages(provider)) {
+                    ItemStack filled = ResourceTransfers.fillMappedContainer(grid, provider, h, toRequest, source);
+                    if (filled == null) return;
+                    h = filled;
+                    changed = true;
+                } else {
+                    long networkAmount = extractFromNetworkResource(grid, provider, toRequest, source);
+                    if (networkAmount > 0) {
+                        long injected = handler.inject(h, networkAmount, source);
+                        if (injected < networkAmount) {
+                            // Do not destroy resources when a container accepts less
+                            // than the amount removed from the network.
+                            injectToNetworkResource(grid, provider,
+                                    networkAmount - injected, source);
+                        }
+                        changed = injected > 0;
                     }
-                    changed = injected > 0;
                 }
             }
 

@@ -8,12 +8,15 @@ import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
 import appeng.me.cache.GridStorageCache;
 import appeng.me.cache.NetworkMonitor;
+import appeng.me.helpers.BaseActionSource;
 import nyonio.terminal_interaction_integration.TIIConfig;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IResourceNetworkMonitor;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.ae2.ResourceFakeMonitor;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEGridView;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEIntegration;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -25,6 +28,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,11 +71,29 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Unique
     private int tii$resourceUpdateTickCounter;
 
+    @Unique
+    private CrazyAEGridView[] tii$crazyViews = new CrazyAEGridView[0];
+
+    @Unique
+    private boolean tii$crazyViewsInitialized;
+
+    @Unique
+    private final IActionSource tii$displaySource = new BaseActionSource();
+
     @Override
     public void initResourceMonitor(GridStorageCache gridCache, IStorageChannel<?> resourceChannel) {
         if (this.myChannel instanceof IItemStorageChannel) {
+            if (!tii$crazyViewsInitialized) {
+                tii$crazyViewsInitialized = true;
+                CrazyAEIntegration.Mapping[] mappings = CrazyAEIntegration.mappings();
+                tii$crazyViews = new CrazyAEGridView[mappings.length];
+                for (int i = 0; i < mappings.length; i++) {
+                    tii$crazyViews[i] = new CrazyAEGridView(gridCache, mappings[i]);
+                }
+                this.tii$addCrazyResources((IItemList) this.cachedList);
+            }
             IResourceProvider provider = TerminalInteractionRegistry.getProviderByChannel(resourceChannel);
-            if (provider == null) return;
+            if (provider == null || CrazyAEIntegration.manages(provider)) return;
             
             String providerName = provider.getName();
             if (!resourceMonitors.containsKey(providerName)) {
@@ -138,13 +160,14 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
         )
     )
     private void tii$restoreVirtualResourcesAfterReset(final CallbackInfo ci) {
-        if (resourceMonitors.isEmpty() || !(this.myChannel instanceof IItemStorageChannel)) return;
+        if (!(this.myChannel instanceof IItemStorageChannel)) return;
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         final IItemList<IAEItemStack> cachedItems = (IItemList) this.cachedList;
         for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
             monitor.restoreAvailableItems(cachedItems);
         }
+        this.tii$addCrazyResources(cachedItems);
     }
 
     @Inject(method = "forceUpdate", at = @At("HEAD"))
@@ -161,12 +184,18 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
 
     @Inject(method = "onTick", at = @At("HEAD"))
     private void tii$updateVirtualResources(final CallbackInfo ci) {
+        final int interval = TIIConfig.getVirtualResourceUpdateIntervalTicks();
+        for (CrazyAEGridView view : tii$crazyViews) {
+            IAEItemStack change = view.tick(interval);
+            if (change != null) {
+                this.tii$postVirtualChange(true, Collections.singletonList(change), tii$displaySource);
+            }
+        }
         if (this.tii$pendingChanges.isEmpty()) {
             this.tii$resourceUpdateTickCounter = 0;
             return;
         }
 
-        final int interval = TIIConfig.getVirtualResourceUpdateIntervalTicks();
         if (interval <= 1 || ++this.tii$resourceUpdateTickCounter >= interval) {
             this.tii$resourceUpdateTickCounter = 0;
             this.tii$flushPendingResourceChanges();
@@ -222,7 +251,7 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
 
     @Inject(method = "getAvailableItems", at = @At("TAIL"))
     public void getAvailableItems(final IItemList<T> out, final CallbackInfoReturnable<IItemList<T>> cir) {
-        if (!resourceMonitors.isEmpty() && this.myChannel instanceof IItemStorageChannel
+        if (this.myChannel instanceof IItemStorageChannel
             && !this.tii$inForceUpdate) {
             try {
                 @SuppressWarnings("unchecked")
@@ -230,6 +259,7 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
                 for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
                     monitor.getAvailableItems(itemOut);
                 }
+                this.tii$addCrazyResources(itemOut);
             } catch (Exception e) {
                 TerminalInteractionIntegration.getLogger().error(
                     "[TII] Failed to add resources to terminal display", e
@@ -241,6 +271,7 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
     @Override
     public void addToAvailableItems(IItemList<IAEItemStack> out) {
         if (out == null) return;
+        this.tii$addCrazyResources(out);
         
         for (ResourceFakeMonitor monitor : resourceMonitors.values()) {
             try {
@@ -251,5 +282,10 @@ public abstract class MixinNetworkMonitor<T extends IAEStack<T>> implements IRes
                 );
             }
         }
+    }
+
+    @Unique
+    private void tii$addCrazyResources(IItemList<IAEItemStack> out) {
+        for (CrazyAEGridView view : tii$crazyViews) view.addTo(out);
     }
 }

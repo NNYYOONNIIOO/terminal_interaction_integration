@@ -9,7 +9,8 @@
     "ae2.MixinGridStorageCache",
     "ae2.MixinNetworkMonitor",
     "ae2.MixinNetworkInventoryHandler",
-    "ae2.MixinContainerMEMonitorable"
+    "ae2.MixinContainerMEMonitorable",
+    "ae2.MixinVirtualResourceCreativeDuplicate"
   ],
   "client": [
     "ae2.MixinGuiMEMonitorable"

@@ -27,6 +27,8 @@ import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.api.IContainerHandler;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.TerminalInteractionIntegration;
+import nyonio.terminal_interaction_integration.ae2.ResourceTransfers;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEIntegration;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -97,42 +99,14 @@ public class CPacketResourceAction implements IMessage {
             return null;
         }
         
-        @SuppressWarnings({"unchecked", "rawtypes"})
         private static long injectToNetworkResource(IStorageGrid grid, IResourceProvider provider,
                 long amount, IActionSource source) {
-            if (amount <= 0) return 0;
-            IStorageChannel<?> channel = provider.getStorageChannel();
-            if (channel == null) return 0;
-            IMEMonitor monitor = grid.getInventory(channel);
-            if (monitor == null) return 0;
-            try {
-                IAEStack stack = (IAEStack) channel.createStack(amount);
-                if (stack == null) return 0;
-                IAEStack result = (IAEStack) monitor.injectItems(stack, Actionable.MODULATE, source);
-                return result == null ? amount : amount - result.getStackSize();
-            } catch (Exception e) {
-                TerminalInteractionIntegration.getLogger().error("[TII] Failed to inject to network resource channel", e);
-                return 0;
-            }
+            return ResourceTransfers.insert(grid, provider, amount, Actionable.MODULATE, source);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         private static long extractFromNetworkResource(IStorageGrid grid, IResourceProvider provider,
                 long amount, IActionSource source) {
-            if (amount <= 0) return 0;
-            IStorageChannel<?> channel = provider.getStorageChannel();
-            if (channel == null) return 0;
-            IMEMonitor monitor = grid.getInventory(channel);
-            if (monitor == null) return 0;
-            try {
-                IAEStack stack = (IAEStack) channel.createStack(amount);
-                if (stack == null) return 0;
-                IAEStack result = (IAEStack) monitor.extractItems(stack, Actionable.MODULATE, source);
-                return result == null ? 0 : result.getStackSize();
-            } catch (Exception e) {
-                TerminalInteractionIntegration.getLogger().error("[TII] Failed to extract from network resource channel", e);
-                return 0;
-            }
+            return ResourceTransfers.extract(grid, provider, amount, Actionable.MODULATE, source);
         }
         
         private static void handleExtractFromNetwork(CPacketResourceAction message, EntityPlayerMP player) {
@@ -163,21 +137,24 @@ public class CPacketResourceAction implements IMessage {
                 return;
             }
             
-            long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
-            if (networkAmount <= 0) {
-                TerminalInteractionIntegration.getLogger()
-                    .warn("[TII] No resources available in network for: " + message.packetTypeName);
-                return;
-            }
-            
+            if (!player.inventory.getItemStack().isEmpty()) return;
             ItemStack container = handler.getEmptyContainer();
             if (container == null || container.isEmpty()) {
                 TerminalInteractionIntegration.getLogger()
                     .warn("[TII] No empty container available for: " + message.packetTypeName);
                 return;
             }
-            
+            container = container.copy();
+            container.setCount(1);
+            long requested = Math.min(message.packetAmount, Math.max(0,
+                    handler.getMaxCapacity(container) - handler.getStoredAmount(container)));
+            long networkAmount = extractFromNetworkResource(grid, provider, requested, source);
+            if (networkAmount <= 0) return;
             long injected = handler.inject(container, networkAmount, source);
+            if (injected < networkAmount) {
+                injectToNetworkResource(grid, provider, networkAmount - injected, source);
+            }
+            if (injected <= 0) return;
 
             player.inventory.setItemStack(container);
             updateHeld(player);
@@ -222,14 +199,29 @@ public class CPacketResourceAction implements IMessage {
             
             boolean changed = false;
             if (message.isFilling) {
-                long extracted = handler.extract(heldItem, message.currentAmount, source);
+                long amount = Math.min(Math.max(0, message.currentAmount), handler.getStoredAmount(heldItem));
+                long accepted = ResourceTransfers.insert(grid, provider, amount, Actionable.SIMULATE, source);
+                long extracted = handler.extract(heldItem, accepted, source);
                 if (extracted > 0) {
-                    changed = injectToNetworkResource(grid, provider, extracted, source) > 0;
+                    long injected = injectToNetworkResource(grid, provider, extracted, source);
+                    if (injected < extracted) handler.inject(heldItem, extracted - injected, source);
+                    changed = injected > 0;
                 }
             } else {
-                long networkAmount = extractFromNetworkResource(grid, provider, message.packetAmount, source);
-                if (networkAmount > 0) {
-                    changed = handler.inject(heldItem, networkAmount, source) > 0;
+                long requested = Math.min(message.packetAmount, Math.max(0,
+                        handler.getMaxCapacity(heldItem) - handler.getStoredAmount(heldItem)));
+                if (CrazyAEIntegration.manages(provider)) {
+                    ItemStack filled = ResourceTransfers.fillMappedContainer(grid, provider, heldItem, requested, source);
+                    if (filled == null) return;
+                    heldItem = filled;
+                    changed = true;
+                } else {
+                    long networkAmount = extractFromNetworkResource(grid, provider, requested, source);
+                    if (networkAmount > 0) {
+                        long injected = handler.inject(heldItem, networkAmount, source);
+                        if (injected < networkAmount) injectToNetworkResource(grid, provider, networkAmount - injected, source);
+                        changed = injected > 0;
+                    }
                 }
             }
 

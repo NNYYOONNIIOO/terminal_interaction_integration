@@ -213,7 +213,7 @@ public class TerminalInteractionHandler {
             boolean isFluidCont = isFluidContainer(heldItem);
             boolean isGasCont = isGasContainer(heldItem);
             boolean isAE2FCContainer = isFluidCont || isGasCont;
-            IContainerHandler customHandler = TerminalInteractionRegistry.getContainerHandler(heldItem);
+            IContainerHandler customHandler = getContainerHandlerForTarget(heldItem, aeStack);
             
             if (isAE2FCVirtual && isAE2FCContainer) {
                 boolean hasContent = isFluidCont ? hasFluidContent(heldItem) : hasGasContent(heldItem);
@@ -313,7 +313,7 @@ public class TerminalInteractionHandler {
             boolean isAE2FCVirtual = isAE2FCVirtualPacket(aeStack);
             boolean isOurVirtual = isOurVirtualPacket(aeStack);
             
-            IContainerHandler customHandler = TerminalInteractionRegistry.getContainerHandler(heldItem);
+            IContainerHandler customHandler = getContainerHandlerForTarget(heldItem, aeStack);
             boolean isFluidCont = isFluidContainer(heldItem);
             boolean isGasCont = isGasContainer(heldItem);
             boolean isAE2FCContainer = !heldItem.isEmpty() && (isFluidCont || isGasCont);
@@ -416,7 +416,10 @@ public class TerminalInteractionHandler {
                 return;
             }
             
-            IResourceProvider containerProvider = TerminalInteractionRegistry.getProviderForContainer(heldItem);
+            IResourceProvider containerProvider = getProviderForTarget(aeStack);
+            if (containerProvider == null) {
+                containerProvider = TerminalInteractionRegistry.getProviderForContainer(heldItem);
+            }
             if (containerProvider == null) return;
             
             if (hasContent) {
@@ -467,5 +470,20 @@ public class TerminalInteractionHandler {
                 return null;
             }
         }
+    }
+
+    private static IResourceProvider getProviderForTarget(IAEItemStack target) {
+        if (target == null) return null;
+        IPacketType packet = TerminalInteractionRegistry.getPacketType(target.asItemStackRepresentation());
+        return packet == null ? null : TerminalInteractionRegistry.getProvider(packet.getName());
+    }
+
+    private static IContainerHandler getContainerHandlerForTarget(ItemStack held, IAEItemStack target) {
+        IResourceProvider provider = getProviderForTarget(target);
+        if (provider != null) {
+            IContainerHandler handler = provider.getContainerHandler();
+            return handler != null && handler.canHandle(held) ? handler : null;
+        }
+        return TerminalInteractionRegistry.getContainerHandler(held);
     }
 }

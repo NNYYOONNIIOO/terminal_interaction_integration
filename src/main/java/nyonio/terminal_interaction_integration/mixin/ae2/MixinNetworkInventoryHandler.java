@@ -18,6 +18,7 @@ import nyonio.terminal_interaction_integration.api.IPacketType;
 import nyonio.terminal_interaction_integration.api.IResourceProvider;
 import nyonio.terminal_interaction_integration.api.TerminalInteractionRegistry;
 import nyonio.terminal_interaction_integration.ae2.ResourceFakeMonitor;
+import nyonio.terminal_interaction_integration.compat.crazyae.CrazyAEIntegration;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -61,6 +62,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
             tii$storageCache = (GridStorageCache) grid.getCache(GridStorageCache.class);
             if (tii$storageCache == null) return;
             for (IResourceProvider provider : TerminalInteractionRegistry.getAllProviders()) {
+                if (CrazyAEIntegration.manages(provider)) continue;
                 IStorageChannel<?> resourceChannel = provider.getStorageChannel();
                 if (resourceChannel != null) {
                     ResourceFakeMonitor monitor = new ResourceFakeMonitor(tii$storageCache, resourceChannel);
@@ -74,6 +76,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
 
     @Inject(method = "injectItems", at = @At(value = "FIELD", target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;", opcode = Opcodes.GETFIELD), cancellable = true)
     private void onInjectItems(final T input, final Actionable mode, final IActionSource src, final CallbackInfoReturnable<T> cir) {
+        if (tii$security == null) return; // Do not inspect item representations on real resource channels.
         if (input == null) return;
         if (!(input instanceof IAEItemStack)) return;
         if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
@@ -81,6 +84,12 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
         tii$ensureInitialized();
         IAEItemStack itemStack = (IAEItemStack) input;
         ItemStack itemRep = itemStack.asItemStackRepresentation();
+
+        if (tii$security != null && CrazyAEIntegration.isVirtualPacket(itemRep)) {
+            this.surface(null, mode);
+            cir.setReturnValue(input);
+            return;
+        }
 
         for (Map.Entry<String, ResourceFakeMonitor> entry : tii$resourceMonitors.entrySet()) {
             String providerName = entry.getKey();
@@ -101,6 +110,7 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
 
     @Inject(method = "extractItems", at = @At(value = "FIELD", target = "Lappeng/me/storage/NetworkInventoryHandler;priorityInventory:Ljava/util/NavigableMap;", opcode = Opcodes.GETFIELD), cancellable = true)
     private void onExtractItems(final T request, final Actionable mode, final IActionSource src, final CallbackInfoReturnable<T> cir) {
+        if (tii$security == null) return;
         if (request == null) return;
         if (!(request instanceof IAEItemStack)) return;
         if (src instanceof ResourceFakeMonitor.FakeMonitorSource) return;
@@ -108,6 +118,12 @@ public abstract class MixinNetworkInventoryHandler<T extends IAEStack<T>> {
         tii$ensureInitialized();
         IAEItemStack itemStack = (IAEItemStack) request;
         ItemStack itemRep = itemStack.asItemStackRepresentation();
+
+        if (tii$security != null && CrazyAEIntegration.isVirtualPacket(itemRep)) {
+            this.surface(null, mode);
+            cir.setReturnValue(null);
+            return;
+        }
 
         for (Map.Entry<String, ResourceFakeMonitor> entry : tii$resourceMonitors.entrySet()) {
             String providerName = entry.getKey();

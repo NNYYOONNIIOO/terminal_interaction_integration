@@ -5,6 +5,8 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import net.minecraftforge.fml.relauncher.Side;
@@ -54,6 +56,13 @@ public class TerminalInteractionIntegration
     
     private void initClient() {
         nyonio.terminal_interaction_integration.client.ClientInit.init();
+    }
+
+    @EventHandler
+    public void postInit(FMLPostInitializationEvent event) {
+        if (Loader.isModLoaded("crazyae")) {
+            nyonio.terminal_interaction_integration.compat.crazyae.CrazyAERegistration.register();
+        }
     }
     
     public static Logger getLogger() {
