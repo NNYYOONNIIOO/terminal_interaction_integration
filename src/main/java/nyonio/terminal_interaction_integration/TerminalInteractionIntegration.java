@@ -22,7 +22,7 @@ public class TerminalInteractionIntegration
 {
     public static final String MODID = "terminal_interaction_integration";
     public static final String NAME = "Terminal Interaction Integration";
-    public static final String VERSION = "1.0";
+    public static final String VERSION = "1.2.5";
     public static final String CHANNEL = "tii";
 
     @Mod.Instance(MODID)
